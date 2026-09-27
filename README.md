@@ -3,7 +3,7 @@
 ![Python 3.13+](https://img.shields.io/badge/python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Version](https://img.shields.io/badge/version-0.3.1-58a6ff?style=flat-square)
 ![Tests Coverage](./coverage.svg)
-![CI Quality Pipeline](https://github.com/JoPedro15/finances/actions/workflows/ci.yml/badge.svg?branch=main)
+![CI Quality Pipeline](https://github.com/jopedro-labs/finances-lab/actions/workflows/ci.yml/badge.svg?branch=main)
 <br />
 ![Formatter](https://img.shields.io/badge/formatter-Black-000000?style=flat-square&logo=python&logoColor=white)
 ![Linter](https://img.shields.io/badge/linter-Ruff-000000?style=flat-square&logo=python&logoColor=white)
@@ -35,7 +35,7 @@ Designed with strict separation of concerns, the system uses Google Drive as a *
 ### 2. Install
 
 ```bash
-git clone https://github.com/JoPedro15/finances.git
+git clone https://github.com/jopedro-labs/finances-lab.git
 cd finances
 pip install -e ".[dev]"
 ```
