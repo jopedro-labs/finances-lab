@@ -4,6 +4,7 @@
 ![Version](https://img.shields.io/badge/version-0.3.1-58a6ff?style=flat-square)
 ![Tests Coverage](./coverage.svg)
 ![CI Quality Pipeline](https://github.com/jopedro-labs/finances-lab/actions/workflows/ci.yml/badge.svg?branch=main)
+![Daily Finance Update](https://github.com/jopedro-labs/finances-lab/actions/workflows/daily-update.yml/badge.svg?branch=main)
 <br />
 ![Formatter](https://img.shields.io/badge/formatter-Black-000000?style=flat-square&logo=python&logoColor=white)
 ![Linter](https://img.shields.io/badge/linter-Ruff-000000?style=flat-square&logo=python&logoColor=white)
@@ -349,6 +350,8 @@ make stock-details
 | `make clean`          | Remove cache files, coverage reports, and build artifacts. |
 
 CI runs automatically on every push and pull request to `main` via `.github/workflows/ci.yml`, executing all quality gates and updating the coverage badge.
+
+A daily update runs every day at 07:00 UTC via `.github/workflows/daily-update.yml` — syncs fundamentals, saves a portfolio snapshot, and publishes the latest HTML reports to [GitHub Pages](https://jopedro-labs.github.io/finances/reports/portfolio_report.html).
 
 ---
 
