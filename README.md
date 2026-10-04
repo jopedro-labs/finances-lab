@@ -1,7 +1,7 @@
 # Finances Portfolio Tracker & Opportunity Engine
 
 ![Python 3.13+](https://img.shields.io/badge/python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.3.1-58a6ff?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.6.0-58a6ff?style=flat-square)
 ![Tests Coverage](./coverage.svg)
 ![CI Quality Pipeline](https://github.com/jopedro-labs/finances-lab/actions/workflows/ci.yml/badge.svg?branch=main)
 ![Daily Finance Update](https://github.com/jopedro-labs/finances-lab/actions/workflows/daily-update.yml/badge.svg?branch=main)
