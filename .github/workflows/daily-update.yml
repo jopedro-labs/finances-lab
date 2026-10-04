@@ -1,0 +1,95 @@
+name: Daily Finance Update
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # runs every day at 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Update Finances
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Write Google Drive credentials
+        run: |
+          mkdir -p secrets
+          echo '${{ secrets.GDRIVE_CREDENTIALS_JSON }}' > secrets/credentials.json
+          echo '${{ secrets.GDRIVE_TOKEN_JSON }}' > secrets/token.json
+
+      - name: Write .env
+        run: |
+          cat <<EOF > .env
+          GDRIVE_CLIENT_SECRET_FILE=secrets/credentials.json
+          GDRIVE_TOKEN_FILE=secrets/token.json
+          GDRIVE_CONFIG_FOLDER_ID=${{ secrets.GDRIVE_CONFIG_FOLDER_ID }}
+          GDRIVE_SNAPSHOT_FOLDER_ID=${{ secrets.GDRIVE_SNAPSHOT_FOLDER_ID }}
+          GDRIVE_REPORTS_FOLDER_ID=${{ secrets.GDRIVE_REPORTS_FOLDER_ID }}
+          GDRIVE_DATABASE_FOLDER_ID=${{ secrets.GDRIVE_DATABASE_FOLDER_ID }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}
+          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_TEST_MODE=False
+          EOF
+
+      - name: Run update-finances
+        run: make update-finances
+
+      - name: Publish reports to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: output/reports
+          destination_dir: reports
+          keep_files: false
+
+      - name: Notify Discord — success
+        if: success()
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "✅ Daily Finance Update",
+                "description": "Portfolio atualizado com sucesso.",
+                "color": 3066993,
+                "fields": [{
+                  "name": "📊 Relatório",
+                  "value": "[Ver Relatório](https://jopedro-labs.github.io/finances/reports/portfolio_report.html)"
+                }],
+                "footer": { "text": "'"$(date -u '+%Y-%m-%d %H:%M UTC')"'" }
+              }]
+            }'
+
+      - name: Notify Discord — failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Daily Finance Update",
+                "description": "O update falhou. Verifica os logs do GitHub Actions.",
+                "color": 15158332,
+                "fields": [{
+                  "name": "🔍 Logs",
+                  "value": "[Ver logs](https://github.com/jopedro-labs/finances-lab/actions/workflows/daily-update.yml)"
+                }],
+                "footer": { "text": "'"$(date -u '+%Y-%m-%d %H:%M UTC')"'" }
+              }]
+            }'
