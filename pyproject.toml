@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "finances"
-version = "0.5.0"
+version = "0.6.0"
 description = "Financial portfolio monitoring, quotation tracking, and automation tool."
 readme = "README.md"
 requires-python = ">=3.13"
