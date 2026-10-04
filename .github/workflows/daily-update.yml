@@ -70,7 +70,7 @@ jobs:
                 "color": 3066993,
                 "fields": [{
                   "name": "📊 Relatório",
-                  "value": "[Ver Relatório](https://jopedro-labs.github.io/finances/reports/portfolio_report.html)"
+                  "value": "[Ver Relatório](https://jopedro-labs.github.io/finances-lab/reports/portfolio_report.html)"   
                 }],
                 "footer": { "text": "'"$(date -u '+%Y-%m-%d %H:%M UTC')"'" }
               }]
