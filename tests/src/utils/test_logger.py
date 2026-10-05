@@ -73,9 +73,19 @@ def test_print_without_color(capsys: object) -> None:
     assert "raw output" in captured.out
 
 
-def test_print_with_color(capsys: object) -> None:
-    """Validates print() outputs the message with surrounding ANSI codes."""
+def test_print_with_color_no_tty(capsys: object) -> None:
+    """Validates print() suppresses ANSI codes when not a TTY (default in tests)."""
     log = Logger()
+    log.print("colored output", color="\033[92m")
+    captured = capsys.readouterr()  # type: ignore[attr-defined]
+    assert "colored output" in captured.out
+    assert "\033[0m" not in captured.out
+
+
+def test_print_with_color_tty_enabled(capsys: object) -> None:
+    """Validates print() emits ANSI codes when colors are explicitly enabled."""
+    log = Logger()
+    log._colors_enabled = True
     log.print("colored output", color="\033[92m")
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert "colored output" in captured.out

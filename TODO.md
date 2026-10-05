@@ -42,7 +42,7 @@
 - [x] **QA-08** — Mover função `_f` para fora do loop em `src/cli/opportunity.py:420` — redefinida em cada iteração desnecessariamente
 - [x] **QA-09** — Adicionar comentário explícito em `src/core/snapshot.py:63` onde `provider.get_details(asset)` é chamado apenas pelo side effect de popular o cache
 - [x] **QA-10** — Substituir `!= 1.0` por `abs(total_weight - 1.0) > 1e-9` na validação de pesos em `src/config.py:191` e `:225`
-- [ ] **QA-11** — Substituir logger custom em `src/utils/logger/logger.py` por módulo `logging` standard com Rich handler — ANSI codes hardcoded não funcionam em CI sem TTY
+- [x] **QA-11** — Substituir logger custom em `src/utils/logger/logger.py` por módulo `logging` standard com Rich handler — ANSI codes hardcoded não funcionam em CI sem TTY
 - [x] **QA-12** — Adicionar warning em `src/core/snapshot.py:52` quando portfólio está vazio antes de retornar snapshot vazio
 - [x] **QA-13** — Definir `OUTPUT_DIR = BASE_DIR / "output"` em `src/config.py` e substituir todos os `Path("output")` hardcoded em `src/cli/opportunity.py:43`, `src/cli/quality.py:30`, `src/utils/graphics/allocation.py:16`, `src/utils/graphics/portfolio_charts.py:76`
 - [x] **QA-14** — Normalizar loading de ficheiros JSON entre `src/cli/quality.py:293` e `src/cli/opportunity.py` — estruturas diferentes aceites inconsistentemente

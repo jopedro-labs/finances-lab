@@ -22,12 +22,16 @@ class Logger:
 
     def __init__(self) -> None:
         """Initializes the logger instance. No file I/O setup."""
-        pass
+        self._colors_enabled: bool = sys.stdout.isatty()
 
     @staticmethod
     def _get_timestamp() -> str:
         """Returns current timestamp in YYYY-MM-DD HH:MM:SS format."""
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def _c(self, code: str) -> str:
+        """Returns the ANSI code only when stdout is a TTY."""
+        return code if self._colors_enabled else ""
 
     def info(self, message: str) -> None:
         """Standard informational message."""
@@ -35,41 +39,34 @@ class Logger:
 
     def success(self, message: str) -> None:
         """Success message highlighted in green."""
-        print(f"[{self._GREEN}SUCCESS {self._get_timestamp()}]{self._ENDC} {message}")
+        g, end = self._c(self._GREEN), self._c(self._ENDC)
+        print(f"[{g}SUCCESS {self._get_timestamp()}]{end} {message}")
 
     def warning(self, message: str) -> None:
         """Warning alert highlighted in yellow."""
-        print(f"[{self._WARNING}WARNING {self._get_timestamp()}]{self._ENDC} {message}")
+        y, end = self._c(self._WARNING), self._c(self._ENDC)
+        print(f"[{y}WARNING {self._get_timestamp()}]{end} {message}")
 
     def error(self, message: str, exception: Exception | None = None) -> None:
-        """
-        Error message in red to stderr.
-        Optionally logs the exception details for debugging.
-        """
+        """Error message in red to stderr. Optionally logs the exception details."""
         error_msg: str = f"{message} | Error: {exception}" if exception else message
-        print(
-            f"[{self._FAIL}ERROR {self._get_timestamp()}]{self._ENDC} {error_msg}",
-            file=sys.stderr,
-        )
+        r, end = self._c(self._FAIL), self._c(self._ENDC)
+        print(f"[{r}ERROR {self._get_timestamp()}]{end} {error_msg}", file=sys.stderr)
 
     def section(self, title: str) -> None:
         """Major structural header for the log output."""
-        print(
-            f"[{self._get_timestamp()}] "
-            f"{self._BOLD}{self._HEADER}{title.upper()}{self._ENDC}"
-        )
+        b, h, end = self._c(self._BOLD), self._c(self._HEADER), self._c(self._ENDC)
+        print(f"[{self._get_timestamp()}] {b}{h}{title.upper()}{end}")
 
     def subsection(self, message: str) -> None:
         """Bold informational message to distinguish sub-tasks within a section."""
-        print(f"[{self._get_timestamp()}] {self._BOLD}{message}{self._ENDC}")
+        b, end = self._c(self._BOLD), self._c(self._ENDC)
+        print(f"[{self._get_timestamp()}] {b}{message}{end}")
 
     def print(self, message: str, color: str | None = None) -> None:
-        """
-        Direct replacement for the built-in print command.
-        Bypasses timestamp and prefixes for raw data output.
-        """
-        c: str = color if color else ""
-        end: str = self._ENDC if color else ""
+        """Direct replacement for the built-in print command."""
+        c: str = self._c(color) if color else ""
+        end: str = self._c(self._ENDC) if color else ""
         print(f"{c}{message}{end}")
 
 
