@@ -32,22 +32,18 @@ jobs:
           echo '${{ secrets.GDRIVE_CREDENTIALS_JSON }}' > secrets/credentials.json
           echo '${{ secrets.GDRIVE_TOKEN_JSON }}' > secrets/token.json
 
-      - name: Write .env
-        run: |
-          cat <<EOF > .env
-          GDRIVE_CLIENT_SECRET_FILE=secrets/credentials.json
-          GDRIVE_TOKEN_FILE=secrets/token.json
-          GDRIVE_CONFIG_FOLDER_ID=${{ secrets.GDRIVE_CONFIG_FOLDER_ID }}
-          GDRIVE_SNAPSHOT_FOLDER_ID=${{ secrets.GDRIVE_SNAPSHOT_FOLDER_ID }}
-          GDRIVE_REPORTS_FOLDER_ID=${{ secrets.GDRIVE_REPORTS_FOLDER_ID }}
-          GDRIVE_DATABASE_FOLDER_ID=${{ secrets.GDRIVE_DATABASE_FOLDER_ID }}
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}
-          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
-          DISCORD_TEST_MODE=False
-          EOF
-
       - name: Run update-finances
+        env:
+          GDRIVE_CLIENT_SECRET_FILE: secrets/credentials.json
+          GDRIVE_TOKEN_FILE: secrets/token.json
+          GDRIVE_CONFIG_FOLDER_ID: ${{ secrets.GDRIVE_CONFIG_FOLDER_ID }}
+          GDRIVE_SNAPSHOT_FOLDER_ID: ${{ secrets.GDRIVE_SNAPSHOT_FOLDER_ID }}
+          GDRIVE_REPORTS_FOLDER_ID: ${{ secrets.GDRIVE_REPORTS_FOLDER_ID }}
+          GDRIVE_DATABASE_FOLDER_ID: ${{ secrets.GDRIVE_DATABASE_FOLDER_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_TEST_MODE: "False"
         run: make update-finances
 
       - name: Publish reports to GitHub Pages

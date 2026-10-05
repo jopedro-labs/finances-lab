@@ -32,7 +32,7 @@ def _format_action_emoji(action: RecommendationAction | None) -> str:
 
 def send_quality_notification(evaluated_assets: list[dict[str, Any]]) -> bool:
     """Dispatches a summary of asset quality tiers and scores to Discord."""
-    webhook_url: str | None = settings.discord_webhook_url
+    webhook_url: str = settings.discord_webhook_url.get_secret_value()
     if not webhook_url:
         return False
 
@@ -123,7 +123,7 @@ def send_dashboard_notification(
     image_paths: list[Path],
 ) -> bool:
     """Dispatches dashboard overview and charts to Discord."""
-    webhook_url: str | None = settings.discord_webhook_url
+    webhook_url: str = settings.discord_webhook_url.get_secret_value()
     if not webhook_url:
         return False
 
@@ -163,7 +163,7 @@ def send_discord_notification(
     """Dispatches opportunity_evaluation summary, matrix, and
     action cards to Discord.
     """
-    webhook_url: str | None = settings.discord_webhook_url
+    webhook_url: str = settings.discord_webhook_url.get_secret_value()
     if not webhook_url:
         logger.warning("Discord webhook URL is not configured in settings. Skipping.")
         return False

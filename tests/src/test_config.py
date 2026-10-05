@@ -48,9 +48,12 @@ def test_settings_environment_override() -> None:
 
     with patch.dict("os.environ", env_vars, clear=True):
         s: Settings = Settings(_env_file=None)
-        assert s.gemini_api_key == "test_key_123"
+        assert s.gemini_api_key.get_secret_value() == "test_key_123"
         assert s.gemini_model == "gemini-1.5-pro"
-        assert s.discord_webhook_url == "https://discord.com/api/webhooks/test"
+        assert (
+            s.discord_webhook_url.get_secret_value()
+            == "https://discord.com/api/webhooks/test"
+        )
         assert s.discord_test_mode is True
         assert s.smtp_port == 2525
         assert s.min_drop_pct == 7.5

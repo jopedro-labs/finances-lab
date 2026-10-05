@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from src.config import settings
 from src.core.models import (
@@ -80,7 +81,7 @@ def test_format_action_emoji_none() -> None:
 
 def test_send_discord_notification_missing_webhook_returns_false() -> None:
     """Validates execution stops when webhook URL is missing."""
-    with patch.object(settings, "discord_webhook_url", ""):
+    with patch.object(settings, "discord_webhook_url", SecretStr("")):
         result: bool = send_discord_notification([], {}, 10000.0)
         assert result is False
 
@@ -99,7 +100,9 @@ def test_send_discord_notification_success(
     mock_webhook_class.return_value = mock_webhook
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -135,7 +138,9 @@ def test_send_discord_notification_sell_recommendation(
     )
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -168,7 +173,9 @@ def test_send_discord_notification_no_active_recs(
     )
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -196,7 +203,9 @@ def test_send_discord_notification_with_image_attachment(
     chart_img.write_bytes(b"fake_image_bytes")
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -225,7 +234,9 @@ def test_send_discord_notification_image_nonexistent_skipped(
     missing_img: Path = tmp_path / "missing.png"
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -251,7 +262,9 @@ def test_send_discord_notification_http_failure_returns_false(
     mock_webhook_class.return_value = mock_webhook
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -270,7 +283,9 @@ def test_send_discord_notification_exception_returns_false(
     mock_webhook_class.side_effect = RuntimeError("Connection refused")
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_discord_notification(
             ranked_assets=[mock_asset_score],
@@ -287,7 +302,7 @@ def test_send_discord_notification_exception_returns_false(
 
 def test_send_quality_notification_missing_webhook_returns_false() -> None:
     """Validates early exit when webhook URL is not set."""
-    with patch.object(settings, "discord_webhook_url", ""):
+    with patch.object(settings, "discord_webhook_url", SecretStr("")):
         assert send_quality_notification([]) is False
 
 
@@ -310,7 +325,9 @@ def test_send_quality_notification_success(mock_webhook_class: MagicMock) -> Non
     ]
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_quality_notification(assets)
 
@@ -337,7 +354,9 @@ def test_send_quality_notification_tier_c_color(mock_webhook_class: MagicMock) -
     ]
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_quality_notification(assets)
 
@@ -365,7 +384,9 @@ def test_send_quality_notification_empty_bull_bear(
     ]
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_quality_notification(assets)
 
@@ -380,7 +401,9 @@ def test_send_quality_notification_exception_returns_false(
     mock_webhook_class.side_effect = RuntimeError("timeout")
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_quality_notification([{"symbol": "X"}])
 
@@ -394,7 +417,7 @@ def test_send_quality_notification_exception_returns_false(
 
 def test_send_dashboard_notification_missing_webhook_returns_false() -> None:
     """Validates early exit when webhook URL is not set."""
-    with patch.object(settings, "discord_webhook_url", ""):
+    with patch.object(settings, "discord_webhook_url", SecretStr("")):
         assert send_dashboard_notification(1000.0, -5.0, "AAPL", []) is False
 
 
@@ -413,7 +436,9 @@ def test_send_dashboard_notification_success(
     img.write_bytes(b"fake_chart")
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_dashboard_notification(
             total_value=15000.0,
@@ -440,7 +465,9 @@ def test_send_dashboard_notification_missing_image_skipped(
     missing: Path = tmp_path / "missing.png"
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_dashboard_notification(
             total_value=5000.0,
@@ -465,7 +492,9 @@ def test_send_dashboard_notification_non_2xx_returns_false(
     mock_webhook_class.return_value = mock_webhook
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_dashboard_notification(
             total_value=5000.0,
@@ -485,7 +514,9 @@ def test_send_dashboard_notification_exception_returns_false(
     mock_webhook_class.side_effect = RuntimeError("connection error")
 
     with patch.object(
-        settings, "discord_webhook_url", "https://discord.com/api/webhooks/fake"
+        settings,
+        "discord_webhook_url",
+        SecretStr("https://discord.com/api/webhooks/fake"),
     ):
         result: bool = send_dashboard_notification(1000.0, -5.0, "X", [])
 
