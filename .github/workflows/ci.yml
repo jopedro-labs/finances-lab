@@ -45,6 +45,9 @@ jobs:
         with:
           commit_message: "docs: update coverage badge [skip ci]"
           file_pattern: coverage.svg
+          branch: badges
+          create_branch: true
+          push_options: '--force'
 
       - name: Upload Test Artifacts
         if: always()
