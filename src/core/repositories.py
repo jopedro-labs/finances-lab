@@ -282,21 +282,20 @@ class ParquetHistoryRepository:
 
     def save_snapshot(self, snapshot: PortfolioSnapshot) -> None:
         """Appends a new portfolio snapshot to the Parquet file."""
-        history: list[PortfolioSnapshot] = self.load_history()
-        history.append(snapshot)
-
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
-            records: list[dict[str, Any]] = [
-                {
-                    "timestamp": s.timestamp,
-                    "total_value_eur": s.total_value_eur,
-                    "snapshot_json": json.dumps(s.to_dict()),
-                }
-                for s in history
-            ]
-            df: pd.DataFrame = pd.DataFrame(records)
-            df.to_parquet(str(self.file_path), index=False)
+            record: dict[str, Any] = {
+                "timestamp": snapshot.timestamp,
+                "total_value_eur": snapshot.total_value_eur,
+                "snapshot_json": json.dumps(snapshot.to_dict()),
+            }
+            df_new: pd.DataFrame = pd.DataFrame([record])
+            if self.file_path.exists():
+                df_new.to_parquet(
+                    str(self.file_path), engine="fastparquet", append=True, index=False
+                )
+            else:
+                df_new.to_parquet(str(self.file_path), index=False)
         except Exception as e:
             raise StorageWriteError(
                 f"Failed to write history to Parquet '{self.file_path}': {e}"
