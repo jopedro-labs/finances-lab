@@ -424,12 +424,13 @@ def test_analyze_quality_cmd_storage_error_exits(
 def test_analyze_quality_cmd_no_assets_warns(
     mock_logger: MagicMock, tmp_path: Path
 ) -> None:
-    """Validates warning and early return when portfolio is empty."""
+    """Validates exit when targets file contains empty assets list."""
     empty_targets = tmp_path / "empty.json"
     empty_targets.write_text('{"assets": []}', encoding="utf-8")
-    analyze_quality_cmd(ticker=None, targets_file=empty_targets)
-    mock_logger.warning.assert_called_once()
-    assert "No assets" in mock_logger.warning.call_args[0][0]
+    with pytest.raises(typer.Exit) as exc:
+        analyze_quality_cmd(ticker=None, targets_file=empty_targets)
+    assert exc.value.exit_code == 1
+    mock_logger.error.assert_called_once()
 
 
 def test_analyze_quality_cmd_ticker_not_found_exits(tmp_path: Path) -> None:

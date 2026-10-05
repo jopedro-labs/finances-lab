@@ -5,12 +5,14 @@ vectorization.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
 
 from src.core.exceptions import StorageError
+from src.core.exposure import ExposureEngine
 from src.core.models import Asset, ETFDetails, PortfolioSnapshot, StockDetails
 from src.core.providers import ETFProvider, StockProvider
 from src.core.repositories import (
@@ -38,120 +40,25 @@ def calculate_portfolio_exposure(
     etf_provider: ETFProvider | None = None,
     stock_provider: StockProvider | None = None,
 ) -> PortfolioExposure:
-    """Calculates consolidated value-weighted sector and country exposure
-    for all portfolio holdings (both direct stocks
-    and underlying ETF assets) using Pandas.
+    """Calculates consolidated value-weighted sector and country exposure.
+
+    Deprecated: use ExposureEngine.calculate_consolidated_exposure() instead.
     """
-    repo: PortfolioRepository = portfolio_repo or SqlitePortfolioRepository(
-        DEFAULT_DB_PATH
+    warnings.warn(
+        "calculate_portfolio_exposure is deprecated; "
+        "use ExposureEngine.calculate_consolidated_exposure() instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    provider_etf: ETFProvider = etf_provider or ETFProvider()
-    provider_stock: StockProvider = stock_provider or StockProvider()
-
-    try:
-        assets: list[Asset] = repo.load_assets()
-    except Exception as e:
-        logger.error(f"Failed to load assets for exposure calculation: {e}")
-        return PortfolioExposure()
-
-    asset_map: dict[str, Asset] = {a.isin: a for a in assets if a.isin}
-    snapshot_map: dict[str, float] = {
-        s.isin: s.value_eur for s in snapshot.assets_snapshot if s.isin
-    }
-
-    raw_sector_records: list[dict[str, float | str]] = []
-    raw_country_records: list[dict[str, float | str]] = []
-    total_etf_val: float = 0.0
-    total_portfolio_val: float = snapshot.total_value_eur
-
-    for isin, asset in asset_map.items():
-        asset_value_eur: float = snapshot_map.get(isin, 0.0)
-        if asset_value_eur <= 0.0:
-            continue
-
-        asset_type: str = str(asset.asset_type).upper()
-
-        if asset_type == "ETF" and asset.isin and len(asset.isin) == 12:
-            total_etf_val += asset_value_eur
-            details: ETFDetails | None = provider_etf.get_details(asset)
-            if details is None:
-                continue
-
-            if details.sector_breakdown:
-                for sector in details.sector_breakdown:
-                    raw_sector_records.append(
-                        {
-                            "name": sector.sector_name,
-                            "weighted_value": asset_value_eur
-                            * (sector.weight_pct / 100.0),
-                        }
-                    )
-
-            if details.country_breakdown:
-                for country in details.country_breakdown:
-                    raw_country_records.append(
-                        {
-                            "name": country.country_name,
-                            "weighted_value": asset_value_eur
-                            * (country.weight_pct / 100.0),
-                        }
-                    )
-        elif asset_type == "STOCK":
-            stock_details: StockDetails | None = provider_stock.get_details(asset)
-            sector_name: str = (
-                stock_details.sector
-                if stock_details and stock_details.sector
-                else "Unknown"
-            )
-            country_name: str = "United States"
-
-            raw_sector_records.append(
-                {
-                    "name": sector_name,
-                    "weighted_value": asset_value_eur,
-                }
-            )
-            raw_country_records.append(
-                {
-                    "name": country_name,
-                    "weighted_value": asset_value_eur,
-                }
-            )
-
-    sector_pcts: dict[str, float] = {}
-    country_pcts: dict[str, float] = {}
-    denominator: float = total_portfolio_val if total_portfolio_val > 0.0 else 1.0
-
-    if raw_sector_records:
-        df_sectors: pd.DataFrame = pd.DataFrame(raw_sector_records)
-        sector_grouped: pd.Series[float] = df_sectors.groupby("name")[
-            "weighted_value"
-        ].sum()
-
-        sector_pcts = {
-            str(name): round(float((val / denominator) * 100.0), 2)
-            for name, val in sector_grouped.items()
-        }
-
-    if raw_country_records:
-        df_countries: pd.DataFrame = pd.DataFrame(raw_country_records)
-        country_grouped: pd.Series[float] = df_countries.groupby("name")[
-            "weighted_value"
-        ].sum()
-
-        country_pcts = {
-            str(name): round(float((val / denominator) * 100.0), 2)
-            for name, val in country_grouped.items()
-        }
-
+    engine = ExposureEngine(
+        etf_provider=etf_provider,
+        stock_provider=stock_provider,
+        portfolio_repo=portfolio_repo,
+    )
+    sector_pcts, country_pcts = engine.calculate_consolidated_exposure(snapshot)
     return PortfolioExposure(
-        sector_exposure=dict(
-            sorted(sector_pcts.items(), key=lambda item: item[1], reverse=True)
-        ),
-        country_exposure=dict(
-            sorted(country_pcts.items(), key=lambda item: item[1], reverse=True)
-        ),
-        total_etf_value_eur=round(total_etf_val, 2),
+        sector_exposure=sector_pcts,
+        country_exposure=country_pcts,
     )
 
 

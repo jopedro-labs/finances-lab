@@ -6,7 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.infra.database.connection import DEFAULT_DB_PATH
+from src.infra.database.connection import DEFAULT_DB_PATH, get_db_context
 
 _ALLOWED_DATE_COLS: frozenset[str] = frozenset({"date", "timestamp"})
 _ALLOWED_TICKER_COLS: frozenset[str] = frozenset({"ticker", "yahoo_ticker"})
@@ -73,11 +73,8 @@ class FinanceSQLExtractor:
         if not self.db_path.exists():
             return []
 
-        conn: sqlite3.Connection = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
         records: list[AssetHistoricalRecord] = []
-
-        try:
+        with get_db_context(self.db_path) as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             date_col: str = self._safe_col(
                 self._get_column_name(cursor, "snapshots", ["date", "timestamp"]),
@@ -118,9 +115,6 @@ class FinanceSQLExtractor:
                         value_eur=float(row["value_eur"]),
                     )
                 )
-        finally:
-            conn.close()
-
         return records
 
     def fetch_portfolio_history(self) -> list[PortfolioHistoricalRecord]:
@@ -128,11 +122,8 @@ class FinanceSQLExtractor:
         if not self.db_path.exists():
             return []
 
-        conn: sqlite3.Connection = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
         records: list[PortfolioHistoricalRecord] = []
-
-        try:
+        with get_db_context(self.db_path) as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             date_col = self._safe_col(
                 self._get_column_name(cursor, "snapshots", ["date", "timestamp"]),
@@ -153,7 +144,4 @@ class FinanceSQLExtractor:
                         total_value_eur=float(row["total_value_eur"]),
                     )
                 )
-        finally:
-            conn.close()
-
         return records

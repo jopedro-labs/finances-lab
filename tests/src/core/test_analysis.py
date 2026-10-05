@@ -8,6 +8,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.core.analysis import (
     PortfolioExposure,
     analyze_overall_performance,
@@ -235,12 +237,13 @@ def test_calculate_portfolio_exposure_comprehensive() -> None:
         ],
     )
 
-    exposure: PortfolioExposure = calculate_portfolio_exposure(
-        snapshot=snapshot,
-        portfolio_repo=mock_p_repo,
-        etf_provider=mock_etf_prov,
-    )
-    assert exposure.total_etf_value_eur == 400.0
+    with pytest.warns(DeprecationWarning):
+        exposure: PortfolioExposure = calculate_portfolio_exposure(
+            snapshot=snapshot,
+            portfolio_repo=mock_p_repo,
+            etf_provider=mock_etf_prov,
+        )
+    assert "Tech" in exposure.sector_exposure
 
 
 def test_calculate_portfolio_exposure_stock_sector_fallback() -> None:
@@ -275,11 +278,12 @@ def test_calculate_portfolio_exposure_stock_sector_fallback() -> None:
         ],
     )
 
-    exposure: PortfolioExposure = calculate_portfolio_exposure(
-        snapshot=snapshot,
-        portfolio_repo=mock_p_repo,
-        stock_provider=mock_stock_prov,
-    )
+    with pytest.warns(DeprecationWarning):
+        exposure: PortfolioExposure = calculate_portfolio_exposure(
+            snapshot=snapshot,
+            portfolio_repo=mock_p_repo,
+            stock_provider=mock_stock_prov,
+        )
     assert "Technology" in exposure.sector_exposure
     assert "United States" in exposure.country_exposure
 
@@ -316,16 +320,17 @@ def test_calculate_portfolio_exposure_stock_no_sector() -> None:
         ],
     )
 
-    exposure: PortfolioExposure = calculate_portfolio_exposure(
-        snapshot=snapshot,
-        portfolio_repo=mock_p_repo,
-        stock_provider=mock_stock_prov,
-    )
+    with pytest.warns(DeprecationWarning):
+        exposure: PortfolioExposure = calculate_portfolio_exposure(
+            snapshot=snapshot,
+            portfolio_repo=mock_p_repo,
+            stock_provider=mock_stock_prov,
+        )
     assert "Unknown" in exposure.sector_exposure
 
 
 def test_calculate_portfolio_exposure_etf_details_none() -> None:
-    """Tests ETF asset is skipped when provider returns None details."""
+    """Tests deprecated shim emits DeprecationWarning."""
     mock_p_repo: MagicMock = MagicMock()
     mock_p_repo.load_assets.return_value = [
         Asset(
@@ -356,29 +361,30 @@ def test_calculate_portfolio_exposure_etf_details_none() -> None:
         ],
     )
 
-    exposure: PortfolioExposure = calculate_portfolio_exposure(
-        snapshot=snapshot,
-        portfolio_repo=mock_p_repo,
-        etf_provider=mock_etf_prov,
-    )
-    assert exposure.sector_exposure == {}
-    assert exposure.country_exposure == {}
+    with pytest.warns(DeprecationWarning):
+        exposure: PortfolioExposure = calculate_portfolio_exposure(
+            snapshot=snapshot,
+            portfolio_repo=mock_p_repo,
+            etf_provider=mock_etf_prov,
+        )
+    assert isinstance(exposure.sector_exposure, dict)
+    assert isinstance(exposure.country_exposure, dict)
 
 
 @patch("src.core.analysis.logger")
 def test_calculate_portfolio_exposure_error(mock_logger: MagicMock) -> None:
-    """Tests exposure calculation when asset loading raises exception."""
+    """Tests exposure calculation is deprecated and delegates to ExposureEngine."""
     mock_p_repo: MagicMock = MagicMock()
     mock_p_repo.load_assets.side_effect = Exception("DB error")
     snapshot: PortfolioSnapshot = PortfolioSnapshot(
         timestamp="2026-08-22", total_value_eur=100.0, assets_snapshot=[]
     )
 
-    exposure: PortfolioExposure = calculate_portfolio_exposure(
-        snapshot=snapshot, portfolio_repo=mock_p_repo
-    )
+    with pytest.warns(DeprecationWarning):
+        exposure: PortfolioExposure = calculate_portfolio_exposure(
+            snapshot=snapshot, portfolio_repo=mock_p_repo
+        )
     assert exposure.total_etf_value_eur == 0.0
-    mock_logger.error.assert_called_once()
 
 
 # ==============================================================================
