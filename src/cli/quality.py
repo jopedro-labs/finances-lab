@@ -25,6 +25,7 @@ from src.infra.database.connection import DEFAULT_DB_PATH
 from src.infra.notifications.discord import (
     send_quality_notification,
 )
+from src.utils.json_loader import load_json_data
 from src.utils.logger.logger import logger
 
 app: typer.Typer = typer.Typer(
@@ -286,23 +287,24 @@ def analyze_quality_cmd(
     assets: list[Asset] = []
 
     if targets_file.exists():
+        raw_items: list[dict[str, Any]] = load_json_data(targets_file)
+        if not raw_items:
+            logger.error(f"No assets found in '{targets_file}'.")
+            raise typer.Exit(code=1)
         try:
-            with open(targets_file, encoding="utf-8") as f:
-                data: dict[str, Any] = json.load(f)
-                for item in data.get("assets", []):
-                    item_dict: dict[str, Any] = item
-                    assets.append(
-                        Asset(
-                            name=str(item_dict["name"]),
-                            isin=str(item_dict.get("isin", "")),
-                            yahoo_ticker=str(item_dict["yahoo_ticker"]),
-                            asset_type=str(item_dict["asset_type"]),
-                            quantity=0.0,
-                            average_buy_price=0.0,
-                        )
+            for item_dict in raw_items:
+                assets.append(
+                    Asset(
+                        name=str(item_dict["name"]),
+                        isin=str(item_dict.get("isin", "")),
+                        yahoo_ticker=str(item_dict["yahoo_ticker"]),
+                        asset_type=str(item_dict["asset_type"]),
+                        quantity=0.0,
+                        average_buy_price=0.0,
                     )
-        except Exception as err:
-            logger.error(f"Failed to load targets from '{targets_file}': {err}")
+                )
+        except (KeyError, TypeError) as err:
+            logger.error(f"Failed to parse assets from '{targets_file}': {err}")
             raise typer.Exit(code=1) from err
     else:
         portfolio_repo: SqlitePortfolioRepository = SqlitePortfolioRepository()

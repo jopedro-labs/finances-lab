@@ -4,7 +4,6 @@ ranking with exposure policy constraints."""
 from __future__ import annotations
 
 import csv
-import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -38,35 +37,13 @@ from src.core.repositories import SqliteHistoryRepository, SqliteOpportunityRepo
 from src.infra.ai.client import GeminiClient
 from src.infra.database.connection import DEFAULT_DB_PATH
 from src.infra.notifications.discord import send_discord_notification
+from src.utils.json_loader import load_json_data
 from src.utils.logger.logger import logger
 
 app: typer.Typer = typer.Typer(
     help="Investment opportunity evaluation engine CLI commands."
 )
 console: Console = Console()
-
-
-def load_json_data(file_path: Path) -> list[dict[str, Any]]:
-    """Loads and normalizes JSON data containing asset lists or holdings."""
-    if not file_path.exists():
-        logger.warning(f"File not found: {file_path}")
-        return []
-
-    try:
-        with open(file_path, encoding="utf-8") as file:
-            data: Any = json.load(file)
-    except Exception as err:
-        logger.error(f"Failed to read JSON file '{file_path}': {err}")
-        return []
-
-    if isinstance(data, list):
-        return [item for item in data if isinstance(item, dict)]
-    if isinstance(data, dict) and "assets" in data:
-        raw_assets: Any = data.get("assets")
-        if isinstance(raw_assets, list):
-            return [item for item in raw_assets if isinstance(item, dict)]
-
-    return []
 
 
 def calculate_current_allocations(
