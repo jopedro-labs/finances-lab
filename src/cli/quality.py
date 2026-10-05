@@ -27,8 +27,6 @@ from src.infra.notifications.discord import (
 )
 from src.utils.logger.logger import logger
 
-OUTPUT_DIR: Path = Path("output")
-
 app: typer.Typer = typer.Typer(
     help="Independent fundamental health and quality evaluation engine commands."
 )

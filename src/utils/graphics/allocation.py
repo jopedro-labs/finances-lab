@@ -11,9 +11,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns  # type: ignore[import-untyped]
 
+from src.config import OUTPUT_DIR
 from src.utils.logger.logger import logger
 
-PLOTS_DIR: Path = Path("output/plots")
+PLOTS_DIR: Path = OUTPUT_DIR / "plots"
 
 
 def generate_allocation_chart(

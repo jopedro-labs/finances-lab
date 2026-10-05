@@ -16,7 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from src.config import DATA_DIR, settings
+from src.config import DATA_DIR, OUTPUT_DIR, settings
 from src.core.exceptions import (
     GeminiAPIError,
     GeminiAuthError,
@@ -39,8 +39,6 @@ from src.infra.ai.client import GeminiClient
 from src.infra.database.connection import DEFAULT_DB_PATH
 from src.infra.notifications.discord import send_discord_notification
 from src.utils.logger.logger import logger
-
-OUTPUT_DIR: Path = Path("output")
 
 app: typer.Typer = typer.Typer(
     help="Investment opportunity evaluation engine CLI commands."
@@ -351,6 +349,9 @@ def export_outputs(
                 }
             )
 
+        def _f(v: Any, fmt: str = ".1f") -> str:
+            return format(v, fmt) if v is not None and v != 0.0 else "N/A"
+
         advisories_ctx: list[dict[str, Any]] = []
         if has_ai and recommendations_map:
             score_map_ctx: dict[str, AssetScore] = {s.symbol: s for s in ranked_scores}
@@ -416,10 +417,6 @@ def export_outputs(
                         }
                     )
                 else:
-
-                    def _f(v: Any, fmt: str = ".1f") -> str:
-                        return format(v, fmt) if v is not None and v != 0.0 else "N/A"
-
                     adv.update(
                         {
                             "tr_pe": _f(t.get("trailing_pe")),
@@ -544,7 +541,7 @@ def _display_rebalance_results(
 
     summary_panel: Panel = Panel(
         summary_text,
-        title="[bold cyan]PORTFOLIO & STATEGY SUMMARY[/bold cyan]",
+        title="[bold cyan]PORTFOLIO & STRATEGY SUMMARY[/bold cyan]",
         expand=True,
     )
     console.print(summary_panel, soft_wrap=True)

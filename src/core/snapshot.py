@@ -50,6 +50,9 @@ def get_snapshot(
         return None
 
     if not assets:
+        logger.warning(
+            "Portfolio is empty — no assets found. Returning empty snapshot."
+        )
         return PortfolioSnapshot(
             timestamp=datetime.now().isoformat(),
             total_value_eur=0.0,
@@ -60,7 +63,9 @@ def get_snapshot(
         provider: AssetDataProvider = get_provider_for_asset(asset)
         raw_quotation: Quotation | None = provider.get_price(asset)
 
-        provider.get_details(asset)
+        provider.get_details(
+            asset
+        )  # populates provider's internal details cache as a side-effect
 
         if not raw_quotation:
             return asset, None
