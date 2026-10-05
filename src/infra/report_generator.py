@@ -42,10 +42,12 @@ class PortfolioReportGenerator:
         config_path: Path = DATA_DIR / "portfolio.json",
         output_dir: Path = Path("output/reports"),
         template_dir: Path = _DEFAULT_TEMPLATE_DIR,
+        monthly_contribution: float = 500.0,
     ) -> None:
         self.db_path = db_path
         self.config_path = config_path
         self.output_dir = output_dir
+        self.monthly_contribution = monthly_contribution
         self._jinja_env: jinja2.Environment = jinja2.Environment(
             loader=jinja2.FileSystemLoader(str(template_dir)),
             autoescape=jinja2.select_autoescape(["html"]),
@@ -93,7 +95,6 @@ class PortfolioReportGenerator:
         extractor = FinanceSQLExtractor(db_path=self.db_path)
         history = extractor.fetch_portfolio_history()
         initial_value: float = history[-1].total_value_eur if history else 0.0
-        monthly_contribution: float = 500.0
 
         engine = ProjectionEngine()
         scenarios_def = [
@@ -104,7 +105,7 @@ class PortfolioReportGenerator:
         result: list[dict[str, Any]] = []
         for name, rate in scenarios_def:
             scenario: GrowthProjectionScenario = engine.generate_scenario(
-                name, initial_value, monthly_contribution, rate
+                name, initial_value, self.monthly_contribution, rate
             )
             milestones = [
                 {

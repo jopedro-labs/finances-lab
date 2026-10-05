@@ -112,6 +112,41 @@ class GeminiClient:
         if not portfolio_context:
             raise ValueError("portfolio_context payload cannot be empty.")
 
+    def _handle_retry_error(
+        self, err: Exception, attempt: int, label: str, delay: float
+    ) -> float:
+        """Handles a sync retry attempt. Returns next delay or raises."""
+        if isinstance(err, APIError):
+            code: int | None = getattr(err, "code", None)
+            err_msg: str = str(err).lower()
+
+            if code in (401, 403) or "auth" in err_msg:
+                logger.error(f"Auth error for '{label}': {err}")
+                raise GeminiAuthError(f"Authentication failed: {err}") from err
+
+            is_retryable: bool = (
+                code in (429, 500, 502, 503, 504)
+                or "quota" in err_msg
+                or "resource_exhausted" in err_msg
+            )
+
+            if is_retryable and attempt < MAX_RETRIES:
+                logger.warning(
+                    f"Transient API error for '{label}' (Attempt "
+                    f"{attempt}/{MAX_RETRIES}). Retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+                return delay * 2.0
+
+            if code == 429 or "quota" in err_msg:
+                raise GeminiQuotaError(f"API quota exceeded: {err}") from err
+
+            logger.error(f"Gemini API error for '{label}': {err}")
+            raise GeminiAPIError(f"Gemini API failure: {err}") from err
+
+        logger.error(f"Unexpected error calling Gemini API for '{label}': {err}")
+        raise GeminiAPIError(f"Unexpected API error: {err}") from err
+
     def _build_prompt(
         self,
         asset_data: dict[str, Any],
@@ -223,37 +258,8 @@ class GeminiClient:
                     config=config,
                 )
                 break
-            except APIError as err:
-                code: int | None = getattr(err, "code", None)
-                err_msg: str = str(err).lower()
-
-                if code in (401, 403) or "auth" in err_msg:
-                    logger.error(f"Auth error during batch call: {err}")
-                    raise GeminiAuthError(f"Authentication failed: {err}") from err
-
-                is_retryable: bool = (
-                    code in (429, 500, 502, 503, 504)
-                    or "quota" in err_msg
-                    or "resource_exhausted" in err_msg
-                )
-
-                if is_retryable and attempt < MAX_RETRIES:
-                    logger.warning(
-                        f"Transient batch API error (Attempt {attempt}/"
-                        f"{MAX_RETRIES}). Retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-                    delay *= 2.0
-                    continue
-
-                if code == 429 or "quota" in err_msg:
-                    raise GeminiQuotaError(f"API quota exceeded: {err}") from err
-
-                logger.error(f"Gemini API error during batch analysis: {err}")
-                raise GeminiAPIError(f"Gemini API failure: {err}") from err
             except Exception as err:
-                logger.error(f"Unexpected error calling Gemini API: {err}")
-                raise GeminiAPIError(f"Unexpected API error: {err}") from err
+                delay = self._handle_retry_error(err, attempt, "batch", delay)
 
         elapsed_ms: float = (time.perf_counter() - start_time) * 1000
         logger.info(
@@ -332,41 +338,8 @@ class GeminiClient:
                     config=config,
                 )
                 break
-            except APIError as err:
-                code: int | None = getattr(err, "code", None)
-                err_msg: str = str(err).lower()
-
-                if code in (401, 403) or "auth" in err_msg:
-                    logger.error(f"Auth error for '{ticker}': {err}")
-                    raise GeminiAuthError(f"Authentication failed: {err}") from err
-
-                is_retryable: bool = (
-                    code in (429, 500, 502, 503, 504)
-                    or "quota" in err_msg
-                    or "resource_exhausted" in err_msg
-                )
-
-                if is_retryable and attempt < MAX_RETRIES:
-                    logger.warning(
-                        f"Transient API error for '{ticker}' (Attempt "
-                        f"{attempt}/{MAX_RETRIES}). Retrying in {delay:.1f}s..."
-                    )
-                    time.sleep(delay)
-                    delay *= 2.0
-                    continue
-
-                if code == 429 or "quota" in err_msg:
-                    raise GeminiQuotaError(f"API quota exceeded: {err}") from err
-
-                logger.error(
-                    f"Gemini API error during generation for '{ticker}': {err}"
-                )
-                raise GeminiAPIError(f"Gemini API failure: {err}") from err
             except Exception as err:
-                logger.error(
-                    f"Unexpected error calling Gemini API for '{ticker}': {err}"
-                )
-                raise GeminiAPIError(f"Unexpected API error: {err}") from err
+                delay = self._handle_retry_error(err, attempt, ticker, delay)
 
         self._log_telemetry(ticker=ticker, start_time=start_time, response=response)
         return self._parse_response(response=response)
