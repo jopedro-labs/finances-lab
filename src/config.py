@@ -4,13 +4,24 @@ Pydantic Settings and defining strategy parameters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_validator
 from pydantic.types import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    # Expose typed names for mypy without creating module-level instances.
+    settings: Settings
+    CREDS_PATH_GDRIVE: Path
+    TOKEN_PATH_GDRIVE: Path
+    GDRIVE_CONFIG_FOLDER_ID: str | None
+    GDRIVE_DATABASE_FOLDER_ID: str | None
+    GDRIVE_SNAPSHOT_FOLDER_ID: str | None
+    GDRIVE_REPORTS_FOLDER_ID: str | None
+    DEFAULT_ETF_CACHE_TTL_DAYS: int
 
 # Base Paths
 BASE_DIR: Path = Path(__file__).resolve().parent.parent
@@ -149,27 +160,48 @@ class Settings(BaseSettings):
         return int(v) if v is not None else 587
 
 
-settings: Settings = Settings()
+_settings: Settings | None = None
 
-# Backwards Compatibility Aliases
-CREDS_PATH_GDRIVE: Path = settings.gdrive_client_secret_file
-TOKEN_PATH_GDRIVE: Path = settings.gdrive_token_file
-GDRIVE_CONFIG_FOLDER_ID: str | None = settings.gdrive_config_folder_id
-GDRIVE_DATABASE_FOLDER_ID: str | None = settings.gdrive_database_folder_id
-GDRIVE_SNAPSHOT_FOLDER_ID: str | None = settings.gdrive_snapshot_folder_id
-GDRIVE_REPORTS_FOLDER_ID: str | None = settings.gdrive_reports_folder_id
+
+def get_settings() -> Settings:
+    """Returns the global Settings singleton, instantiating it on first call."""
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+def __getattr__(name: str) -> object:
+    """Lazily resolves `settings` and backwards-compat aliases on first access."""
+    if name == "settings":
+        return get_settings()
+    if name == "CREDS_PATH_GDRIVE":
+        return get_settings().gdrive_client_secret_file
+    if name == "TOKEN_PATH_GDRIVE":
+        return get_settings().gdrive_token_file
+    if name == "GDRIVE_CONFIG_FOLDER_ID":
+        return get_settings().gdrive_config_folder_id
+    if name == "GDRIVE_DATABASE_FOLDER_ID":
+        return get_settings().gdrive_database_folder_id
+    if name == "GDRIVE_SNAPSHOT_FOLDER_ID":
+        return get_settings().gdrive_snapshot_folder_id
+    if name == "GDRIVE_REPORTS_FOLDER_ID":
+        return get_settings().gdrive_reports_folder_id
+    if name == "DEFAULT_ETF_CACHE_TTL_DAYS":
+        return get_settings().etf_cache_ttl_days
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 ETF_CACHE_FILE: Path = DATA_DIR / "etf_cache.json"
-DEFAULT_ETF_CACHE_TTL_DAYS: int = settings.etf_cache_ttl_days
 
 
 @dataclass(frozen=True)
 class DipDetectorConfig:
     """Configuration parameters for generic dip detection scans."""
 
-    min_drop_pct: float = settings.min_drop_pct
-    max_drop_pct: float = settings.max_drop_pct
-    lookback_days: int = settings.lookback_days
+    min_drop_pct: float = field(default_factory=lambda: get_settings().min_drop_pct)
+    max_drop_pct: float = field(default_factory=lambda: get_settings().max_drop_pct)
+    lookback_days: int = field(default_factory=lambda: get_settings().lookback_days)
 
 
 DEFAULT_DIP_CONFIG: DipDetectorConfig = DipDetectorConfig()
@@ -179,18 +211,36 @@ DEFAULT_DIP_CONFIG: DipDetectorConfig = DipDetectorConfig()
 class StockStrategyConfig:
     """Configuration parameters for individual stock scoring strategy."""
 
-    dip_min_pct: float = settings.stock_dip_min_pct
-    dip_max_pct: float = settings.stock_dip_max_pct
-    weight_dip: float = settings.stock_weight_dip
-    weight_forward_pe: float = settings.stock_weight_forward_pe
-    weight_52w_range: float = settings.stock_weight_52w_range
-    weight_allocation: float = settings.stock_weight_allocation
-    alloc_gap_max_pct: float = settings.stock_alloc_gap_max_pct
-    dip_penalty_divisor: float = settings.stock_dip_penalty_divisor
-    dip_undershoot_cap: float = settings.stock_dip_undershoot_cap
-    pe_growth_multiplier: float = settings.stock_pe_growth_multiplier
-    pe_neutral_score: float = settings.stock_pe_neutral_score
-    range_bottom_band: float = settings.stock_52w_bottom_band
+    dip_min_pct: float = field(default_factory=lambda: get_settings().stock_dip_min_pct)
+    dip_max_pct: float = field(default_factory=lambda: get_settings().stock_dip_max_pct)
+    weight_dip: float = field(default_factory=lambda: get_settings().stock_weight_dip)
+    weight_forward_pe: float = field(
+        default_factory=lambda: get_settings().stock_weight_forward_pe
+    )
+    weight_52w_range: float = field(
+        default_factory=lambda: get_settings().stock_weight_52w_range
+    )
+    weight_allocation: float = field(
+        default_factory=lambda: get_settings().stock_weight_allocation
+    )
+    alloc_gap_max_pct: float = field(
+        default_factory=lambda: get_settings().stock_alloc_gap_max_pct
+    )
+    dip_penalty_divisor: float = field(
+        default_factory=lambda: get_settings().stock_dip_penalty_divisor
+    )
+    dip_undershoot_cap: float = field(
+        default_factory=lambda: get_settings().stock_dip_undershoot_cap
+    )
+    pe_growth_multiplier: float = field(
+        default_factory=lambda: get_settings().stock_pe_growth_multiplier
+    )
+    pe_neutral_score: float = field(
+        default_factory=lambda: get_settings().stock_pe_neutral_score
+    )
+    range_bottom_band: float = field(
+        default_factory=lambda: get_settings().stock_52w_bottom_band
+    )
 
     def __post_init__(self) -> None:
         """Validates that stock scoring criteria weights sum to 1.0."""
@@ -214,17 +264,18 @@ DEFAULT_STOCK_CONFIG: StockStrategyConfig = StockStrategyConfig()
 class EtfStrategyConfig:
     """Configuration parameters for ETF scoring strategy."""
 
-    weight_dip: float = settings.etf_weight_dip
-    weight_ter: float = settings.etf_weight_ter
-    weight_allocation: float = settings.etf_weight_allocation
-
-    dip_min_pct: float = settings.etf_dip_min_pct
-    dip_max_pct: float = settings.etf_dip_max_pct
-
-    ter_low_pct: float = settings.etf_ter_low_pct
-    ter_high_pct: float = settings.etf_ter_high_pct
-
-    alloc_gap_max_pct: float = settings.etf_alloc_gap_max_pct
+    weight_dip: float = field(default_factory=lambda: get_settings().etf_weight_dip)
+    weight_ter: float = field(default_factory=lambda: get_settings().etf_weight_ter)
+    weight_allocation: float = field(
+        default_factory=lambda: get_settings().etf_weight_allocation
+    )
+    dip_min_pct: float = field(default_factory=lambda: get_settings().etf_dip_min_pct)
+    dip_max_pct: float = field(default_factory=lambda: get_settings().etf_dip_max_pct)
+    ter_low_pct: float = field(default_factory=lambda: get_settings().etf_ter_low_pct)
+    ter_high_pct: float = field(default_factory=lambda: get_settings().etf_ter_high_pct)
+    alloc_gap_max_pct: float = field(
+        default_factory=lambda: get_settings().etf_alloc_gap_max_pct
+    )
 
     def __post_init__(self) -> None:
         """Validates that ETF scoring criteria weights sum to 1.0."""
