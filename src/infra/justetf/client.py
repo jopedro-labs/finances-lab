@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 import requests
@@ -51,6 +52,10 @@ class JustETFClient:
         url: str = f"{self.BASE_URL}?isin={isin}"
         try:
             response: requests.Response = self.session.get(url, timeout=self.timeout)
+            if response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", 60))
+                time.sleep(retry_after)
+                response = self.session.get(url, timeout=self.timeout)
             if response.status_code != 200:
                 raise JustETFScrapeError(
                     f"HTTP error {response.status_code} while fetching ISIN {isin}"

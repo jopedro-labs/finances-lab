@@ -8,6 +8,10 @@ from pathlib import Path
 
 from src.infra.database.connection import DEFAULT_DB_PATH
 
+_ALLOWED_DATE_COLS: frozenset[str] = frozenset({"date", "timestamp"})
+_ALLOWED_TICKER_COLS: frozenset[str] = frozenset({"ticker", "yahoo_ticker"})
+_ALLOWED_TYPE_COLS: frozenset[str] = frozenset({"type", "asset_type"})
+
 
 @dataclass(frozen=True)
 class AssetHistoricalRecord:
@@ -40,13 +44,20 @@ class FinanceSQLExtractor:
     def _get_column_name(
         cursor: sqlite3.Cursor, table: str, candidates: list[str]
     ) -> str:
-        """Resolves existing column name from a list of candidates."""
+        """Resolves existing column name from an allowlisted set of candidates."""
         cursor.execute(f"PRAGMA table_info({table});")  # nosec B608
         existing_cols: set[str] = {row[1] for row in cursor.fetchall()}
         for candidate in candidates:
             if candidate in existing_cols:
                 return candidate
         return candidates[0]
+
+    @staticmethod
+    def _safe_col(value: str, allowed: frozenset[str]) -> str:
+        """Validates a column name against an explicit allowlist."""
+        if value not in allowed:
+            raise ValueError(f"Column name '{value}' is not in the allowed list.")
+        return value
 
     @staticmethod
     def _resolve_quantity_col(cursor: sqlite3.Cursor) -> str:
@@ -68,14 +79,17 @@ class FinanceSQLExtractor:
 
         try:
             cursor: sqlite3.Cursor = conn.cursor()
-            date_col: str = self._get_column_name(
-                cursor, "snapshots", ["date", "timestamp"]
+            date_col: str = self._safe_col(
+                self._get_column_name(cursor, "snapshots", ["date", "timestamp"]),
+                _ALLOWED_DATE_COLS,
             )
-            ticker_col: str = self._get_column_name(
-                cursor, "assets", ["ticker", "yahoo_ticker"]
+            ticker_col: str = self._safe_col(
+                self._get_column_name(cursor, "assets", ["ticker", "yahoo_ticker"]),
+                _ALLOWED_TICKER_COLS,
             )
-            type_col: str = self._get_column_name(
-                cursor, "assets", ["type", "asset_type"]
+            type_col: str = self._safe_col(
+                self._get_column_name(cursor, "assets", ["type", "asset_type"]),
+                _ALLOWED_TYPE_COLS,
             )
             qty_col: str = self._resolve_quantity_col(cursor)
 
@@ -120,8 +134,9 @@ class FinanceSQLExtractor:
 
         try:
             cursor: sqlite3.Cursor = conn.cursor()
-            date_col: str = self._get_column_name(
-                cursor, "snapshots", ["date", "timestamp"]
+            date_col = self._safe_col(
+                self._get_column_name(cursor, "snapshots", ["date", "timestamp"]),
+                _ALLOWED_DATE_COLS,
             )
             query: str = (
                 f"SELECT s.{date_col} AS snapshot_date, "  # nosec B608

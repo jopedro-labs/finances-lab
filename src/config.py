@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator
+from pydantic.types import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Base Paths
@@ -27,11 +28,13 @@ class Settings(BaseSettings):
     )
 
     # Gemini AI
-    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_api_key: SecretStr = Field(default=SecretStr(""), alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-3.6-flash", alias="GEMINI_MODEL")
 
     # Discord Notifications
-    discord_webhook_url: str = Field(default="", alias="DISCORD_WEBHOOK_URL")
+    discord_webhook_url: SecretStr = Field(
+        default=SecretStr(""), alias="DISCORD_WEBHOOK_URL"
+    )
     discord_test_mode: bool = Field(default=False, alias="DISCORD_TEST_MODE")
 
     # Google Drive Integration
@@ -133,7 +136,7 @@ class Settings(BaseSettings):
     smtp_server: str = Field(default="", alias="SMTP_SERVER")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_username: str = Field(default="", alias="SMTP_USERNAME")
-    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_password: SecretStr = Field(default=SecretStr(""), alias="SMTP_PASSWORD")
     alert_email_recipient: str = Field(default="", alias="ALERT_EMAIL_RECIPIENT")
 
     @field_validator("smtp_port", mode="before")

@@ -15,7 +15,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import-un
 
 from src.config import settings
 
-SCOPES: list[str] = ["https://www.googleapis.com/auth/drive"]
+SCOPES: list[str] = ["https://www.googleapis.com/auth/drive.file"]
 
 
 def load_credentials_safe(file_path: str | Path) -> dict[str, Any]:
