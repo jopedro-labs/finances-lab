@@ -15,6 +15,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 
+from src.config import OUTPUT_DIR
 from src.core.models import DashboardOverview
 
 
@@ -73,7 +74,7 @@ def _apply_dark_style(fig: Any, ax: Any) -> None:
 class PortfolioChartExporter:
     """Exports matplotlib charts for portfolio and asset performance history."""
 
-    def __init__(self, output_dir: Path | str = "output/plots") -> None:
+    def __init__(self, output_dir: Path | str = OUTPUT_DIR / "plots") -> None:
         self.output_dir: Path = Path(output_dir)
 
     def _ensure_output_dir(self) -> None:

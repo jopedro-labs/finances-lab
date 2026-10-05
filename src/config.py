@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR: Path = Path(__file__).resolve().parent.parent
 DATA_DIR: Path = BASE_DIR / "data"
 PLOTS_DIR: Path = DATA_DIR / "plots"
+OUTPUT_DIR: Path = BASE_DIR / "output"
 
 
 class Settings(BaseSettings):
@@ -200,7 +201,7 @@ class StockStrategyConfig:
             + self.weight_allocation,
             2,
         )
-        if total_weight != 1.0:
+        if abs(total_weight - 1.0) > 1e-9:
             raise ValueError(
                 f"Stock strategy weights must sum to 1.0, got {total_weight}"
             )
@@ -230,7 +231,7 @@ class EtfStrategyConfig:
         total_weight: float = round(
             self.weight_dip + self.weight_ter + self.weight_allocation, 2
         )
-        if total_weight != 1.0:
+        if abs(total_weight - 1.0) > 1e-9:
             raise ValueError(
                 f"ETF strategy weights must sum to 1.0, got {total_weight}"
             )
