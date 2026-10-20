@@ -489,7 +489,7 @@ class SqliteOpportunityRepository:
 
                     adv_dict = (advisories_map or {}).get(symbol)
                     advisory_json_str: str | None = (
-                        __import__("json").dumps(adv_dict) if adv_dict else None
+                        json.dumps(adv_dict) if adv_dict else None
                     )
 
                     cursor.execute(

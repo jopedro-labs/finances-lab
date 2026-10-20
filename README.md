@@ -1,7 +1,7 @@
 # Finances Portfolio Tracker & Opportunity Engine
 
 ![Python 3.13+](https://img.shields.io/badge/python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.6.0-58a6ff?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.7.0-58a6ff?style=flat-square)
 ![Tests Coverage](https://raw.githubusercontent.com/jopedro-labs/finances-lab/badges/coverage.svg)
 ![CI Quality Pipeline](https://github.com/jopedro-labs/finances-lab/actions/workflows/ci.yml/badge.svg?branch=main)
 ![Daily Finance Update](https://github.com/jopedro-labs/finances-lab/actions/workflows/daily-update.yml/badge.svg?branch=main)
@@ -119,19 +119,19 @@ graph TD
 
 Rather than relying solely on AI outputs, the system uses deterministic multi-factor scoring strategies:
 
-- **Stock Strategy** (`stock_strategy.py`): Evaluates price pullbacks from recent peaks using a trapezoidal sweet-spot curve (penalising falling knives), forward vs. trailing P/E growth ratios, positioning relative to the 52-week range, and normalised relative target allocation gaps.
-- **ETF Strategy** (`etf_strategy.py`): Evaluates technical discount sweet-spots, cost efficiency via Total Expense Ratio (TER), and normalised relative target allocation gaps.
+- **Stock Strategy** (`stock_strategy.py`): Evaluates price pullbacks from recent peaks using a trapezoidal sweet-spot curve (penalising falling knives), forward vs. trailing P/E growth ratios, positioning relative to the 52-week range (with FX-adjusted high/low for non-EUR tickers), and normalised allocation gaps against a configurable absolute target.
+- **ETF Strategy** (`etf_strategy.py`): Evaluates technical discount sweet-spots, cost efficiency via Total Expense Ratio (TER), and allocation gaps using an **absolute magnitude** formula (`gap / normalizer_pct`, default 15%) — ensuring larger absolute targets always rank above smaller ones even in a cold-start portfolio where all current allocations are zero. Default weights: dip **0.35**, TER **0.20**, allocation **0.45**.
 - **Exposure Penalty Multipliers**: Multiplicatively scales down the `total_score` of assets that breach configured sector, country, or single-company concentration thresholds.
 
 ### 2. Look-Through Portfolio Exposure Policies
 
-- **Look-Through Aggregation**: Unpacks underlying ETF holdings (via JustETF data) and merges them with direct equity positions to determine true portfolio-wide concentration.
+- **Look-Through Aggregation**: Unpacks underlying ETF holdings (via JustETF data) and merges them with direct equity positions to determine true portfolio-wide concentration. Country of domicile is resolved dynamically from `StockDetails` — not hardcoded — so non-US equities are correctly attributed.
 - **Policy Constraints**: Enforces configurable thresholds — Country Allocation (default: max 60%), Tech Sector (max 50%), Other Sectors (max 15%), Single Company (max 15%).
 - **Visual Audit Charts**: Exports donut charts visualising consolidated sector, country, and holding exposures (`make exposure`).
 
 ### 3. Absolute Quality Tier Evaluation
 
-- **Fundamental Scoring**: Evaluates assets on a 0–100 scale, assigning Tier A, Tier B, or Tier C classifications based on profit margins, YoY revenue expansion, balance sheet leverage (Debt-to-Equity), and earnings trajectory.
+- **Fundamental Scoring**: Evaluates assets on a 0–100 scale, assigning Tier A, Tier B, or Tier C classifications based on profit margins, YoY revenue expansion, balance sheet leverage (Debt-to-Equity), and earnings trajectory. Fundamentals are **also cached in the `asset_fundamentals` table** (24-hour TTL for stocks, 7-day TTL for ETFs) to avoid redundant API calls across runs. `sync-fundamentals` always bypasses the cache with `force_refresh=True`.
 - **Diagnostic Output**: Generates bull case catalysts, bear case risks, and explicit valuation status (`Undervalued`, `Fair Value`, `Overvalued`) per asset. Results are persisted to `stock_fundamental_history` and `etf_fundamental_history` in SQLite.
 
 ### 4. Historical Analytics & Performance Dashboard
@@ -190,9 +190,14 @@ STOCK_WEIGHT_FORWARD_PE=0.35
 STOCK_WEIGHT_52W_RANGE=0.15
 STOCK_WEIGHT_ALLOCATION=0.15
 
-ETF_WEIGHT_DIP=0.60
+ETF_WEIGHT_DIP=0.35
 ETF_WEIGHT_TER=0.20
-ETF_WEIGHT_ALLOCATION=0.20
+ETF_WEIGHT_ALLOCATION=0.45
+
+# ETF Allocation Score Normalizer
+# Gap above this value → score capped at 1.0.
+# Absolute magnitude ensures larger targets outrank smaller ones in a cold-start portfolio.
+ETF_ALLOC_GAP_NORMALIZER_PCT=15.0
 
 # Stock Scoring Shape Parameters
 STOCK_DIP_PENALTY_DIVISOR=30.0   # Decay rate for falling-knife penalty above dip_max_pct
@@ -222,6 +227,7 @@ The central `finances.db` SQLite database is managed via transactional contexts 
 |:------|:------------|
 | `assets` | Registered holdings — ISIN, Yahoo ticker, quantity, average buy price, asset type. |
 | `snapshots` & `asset_snapshots` | Timestamped portfolio valuation history and per-asset values in EUR. |
+| `asset_fundamentals` | TTL cache for latest fundamentals per asset — serialised `details_json`, quality tier and score, `fetched_at` timestamp. Stocks expire after 24 hours; ETFs after 7 days. |
 | `stock_fundamental_history` | Historical equity fundamentals — P/E ratios, dividend yield, 52-week range, quality tier and score. |
 | `etf_fundamental_history` | Historical ETF metadata — TER, holdings JSON, sector/country breakdown JSON, quality tier and score. |
 | `opportunities` | Header record per rebalancing run — timestamp, total portfolio value, AI flag. |

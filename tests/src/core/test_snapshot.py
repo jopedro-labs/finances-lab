@@ -274,7 +274,7 @@ def test_display_snapshot_with_dict(
 # ==============================================================================
 
 
-@patch("src.infra.gdrive.service.GoogleDriveService")
+@patch("src.core.snapshot.GDriveService")
 def test_trigger_gdrive_backup_success(
     mock_gdrive_cls: MagicMock, tmp_path: Path
 ) -> None:
@@ -293,7 +293,7 @@ def test_trigger_gdrive_backup_success(
     mock_service.backup_file.assert_called_once_with(test_file)
 
 
-@patch("src.infra.gdrive.service.GoogleDriveService")
+@patch("src.core.snapshot.GDriveService")
 def test_trigger_gdrive_backup_failure(
     mock_gdrive_cls: MagicMock, tmp_path: Path
 ) -> None:
@@ -309,7 +309,7 @@ def test_trigger_gdrive_backup_failure(
     assert result is False
 
 
-@patch("src.infra.gdrive.service.GoogleDriveService")
+@patch("src.core.snapshot.GDriveService")
 def test_trigger_gdrive_backup_exception_handling(
     mock_gdrive_cls: MagicMock, tmp_path: Path
 ) -> None:

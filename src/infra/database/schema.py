@@ -158,5 +158,3 @@ def initialize_database(conn: sqlite3.Connection) -> None:
                 )
             except sqlite3.OperationalError:
                 pass
-
-    conn.commit()

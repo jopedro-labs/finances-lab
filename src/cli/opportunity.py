@@ -130,6 +130,8 @@ def enrich_target_asset(
         else None
     )
 
+    # peak_price is the 52-week high price; stored as both "peak_price" and "high_52w"
+    # for backwards compatibility with display and scoring code that reads either key.
     peak_price: float = (
         stock_details.fifty_two_week_high
         if stock_details and stock_details.fifty_two_week_high

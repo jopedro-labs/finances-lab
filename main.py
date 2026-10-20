@@ -45,7 +45,6 @@ CONFIG_FILES: list[Path] = [
     DATA_DIR / "portfolio.json",
     DATA_DIR / "portfolio_targets.json",
     DATA_DIR / "etf_cache.json",
-    DATA_DIR / "system_instruction.json",
 ]
 
 # Database file mapped dynamically to DEFAULT_DB_PATH to avoid filename mismatch
@@ -111,6 +110,7 @@ def main_callback(ctx: typer.Context) -> None:
         raise typer.Exit(code=1) from err
     except Exception as e:
         logger.error(f"Failed to validate environment configuration: {e}")
+        raise typer.Exit(code=1) from e
 
 
 @app.command(name="save-snapshot")
