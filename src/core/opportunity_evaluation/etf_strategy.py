@@ -53,20 +53,26 @@ class EtfScoringStrategy(ScoringStrategy):
     def calculate_allocation_score(
         self, target_allocation_pct: float, current_allocation_pct: float
     ) -> float:
-        """Calculates underweight allocation gap priority score using relative gap.
+        """Calculates allocation gap priority score using absolute gap magnitude.
 
-        Measures the percentage of the target that is still missing.
-        Example: Target 10%, Current 5% -> 50% missing (0.5 score).
-        Example: Target 2%, Current 0% -> 100% missing (1.0 score).
+        Unlike the relative approach (gap/target), this normalises against a
+        fixed reference point so that a larger absolute target always produces
+        a higher score — even when current_allocation is 0% for all assets
+        (cold-start portfolio).
+
+        Example: Target 28%, Current 0% → 28/15 = 1.87 → capped at 1.0
+        Example: Target  5%, Current 0% →  5/15 = 0.33
+        Example: Target 10%, Current 5% →  5/15 = 0.33
         """
         if target_allocation_pct <= 0.0:
             return 0.0
 
         gap_pct: float = target_allocation_pct - current_allocation_pct
         if gap_pct <= 0.0:
-            return 0.0  # Overweight or on target
+            return 0.0
 
-        return max(0.0, min(1.0, gap_pct / target_allocation_pct))
+        normalizer: float = max(self.config.alloc_gap_normalizer_pct, 1.0)
+        return max(0.0, min(1.0, gap_pct / normalizer))
 
     def calculate_score(
         self,

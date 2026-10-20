@@ -171,6 +171,7 @@ def test_sync_stock_fundamentals_cli_success(
     mock_provider.get_details.assert_called_once()
     call_arg: Asset = mock_provider.get_details.call_args[0][0]
     assert call_arg.yahoo_ticker == "AAPL"
+    assert mock_provider.get_details.call_args.kwargs.get("force_refresh") is True
 
 
 @patch("src.cli.fundamentals.StockProvider")
@@ -251,6 +252,7 @@ def test_sync_etf_fundamentals_cli_success(
     mock_provider.get_details.assert_called_once()
     call_arg: Asset = mock_provider.get_details.call_args[0][0]
     assert call_arg.isin == "IE00BK5BQT36"
+    assert mock_provider.get_details.call_args.kwargs.get("force_refresh") is True
 
 
 @patch("src.cli.fundamentals.ETFProvider")

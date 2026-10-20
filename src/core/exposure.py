@@ -3,6 +3,8 @@ and company exposure across portfolio assets."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.config import settings
 from src.core.models import Asset, ETFDetails, PortfolioSnapshot, StockDetails
 from src.core.providers import ETFProvider, StockProvider
@@ -19,12 +21,14 @@ class ExposureEngine:
         etf_provider: ETFProvider | None = None,
         stock_provider: StockProvider | None = None,
         portfolio_repo: PortfolioRepository | None = None,
+        db_path: str | Path | None = None,
     ) -> None:
         self._etf_provider: ETFProvider = etf_provider or ETFProvider()
         self._stock_provider: StockProvider = stock_provider or StockProvider()
         self._portfolio_repo: PortfolioRepository = (
             portfolio_repo or SqlitePortfolioRepository(DEFAULT_DB_PATH)
         )
+        self._db_path: Path = Path(db_path) if db_path else Path(DEFAULT_DB_PATH)
 
     def calculate_consolidated_exposure(
         self, snapshot: PortfolioSnapshot
@@ -59,7 +63,9 @@ class ExposureEngine:
             a_type: str = str(asset.asset_type).upper()
 
             if a_type == "ETF" and asset.isin:
-                details: ETFDetails | None = self._etf_provider.get_details(asset)
+                details: ETFDetails | None = self._etf_provider.get_details(
+                    asset, db_path=self._db_path
+                )
                 if details:
                     mapped_sector_val: float = 0.0
                     if details.sector_breakdown:
@@ -103,7 +109,7 @@ class ExposureEngine:
                     )
             elif a_type == "STOCK":
                 stock_details: StockDetails | None = self._stock_provider.get_details(
-                    asset
+                    asset, db_path=self._db_path
                 )
                 stock_sector_name: str = (
                     stock_details.sector
@@ -113,7 +119,11 @@ class ExposureEngine:
                 sector_totals[stock_sector_name] = (
                     sector_totals.get(stock_sector_name, 0.0) + asset_val
                 )
-                stock_country_name: str = "United States"
+                stock_country_name: str = (
+                    stock_details.country
+                    if stock_details and stock_details.country
+                    else "Unknown"
+                )
                 country_totals[stock_country_name] = (
                     country_totals.get(stock_country_name, 0.0) + asset_val
                 )
@@ -268,7 +278,9 @@ class ExposureEngine:
 
             etf_asset_type: str = str(asset.asset_type).upper()
             if etf_asset_type == "ETF":
-                details: ETFDetails | None = self._etf_provider.get_details(asset)
+                details: ETFDetails | None = self._etf_provider.get_details(
+                    asset, db_path=self._db_path
+                )
                 if details and details.holdings:
                     for holding in details.holdings:
                         holding_isin: str = (

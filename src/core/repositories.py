@@ -594,6 +594,117 @@ class SqliteOpportunityRepository:
             logger.warning(f"Failed to load top opportunities: {e}")
             return []
 
+    def get_asset_fundamentals(
+        self,
+        asset_id: int,
+        asset_type: str,
+        ttl_hours: int,
+    ) -> ETFDetails | StockDetails | None:
+        """Returns cached fundamentals for an asset if they are within the TTL window.
+
+        Args:
+            asset_id: Database primary key of the asset.
+            asset_type: 'STOCK' or 'ETF' — controls which model is deserialized.
+            ttl_hours: Maximum age in hours before the cache is considered stale.
+
+        Returns:
+            Deserialized ETFDetails or StockDetails if a fresh cache entry exists,
+            None otherwise.
+        """
+        if not self.db_path.exists():
+            return None
+
+        try:
+            with get_db_context(str(self.db_path)) as conn:
+                initialize_database(conn)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT fetched_at, details_json, asset_type "
+                    "FROM asset_fundamentals WHERE asset_id = ?",
+                    (asset_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+
+                fetched_at_str: str = str(row["fetched_at"])
+                fetched_at: datetime = datetime.fromisoformat(fetched_at_str)
+                age_hours: float = (
+                    datetime.now(UTC) - fetched_at.replace(tzinfo=UTC)
+                ).total_seconds() / 3600.0
+                if age_hours > ttl_hours:
+                    return None
+
+                details_data: dict[str, Any] = json.loads(str(row["details_json"]))
+                stored_type: str = str(row["asset_type"]).upper()
+                if stored_type == "ETF":
+                    return ETFDetails.from_dict(details_data)
+                return StockDetails.from_dict(details_data)
+        except Exception as e:
+            logger.warning(
+                f"Failed to load cached fundamentals for asset_id={asset_id}: {e}"
+            )
+            return None
+
+    def upsert_asset_fundamentals(
+        self,
+        asset_id: int,
+        asset_type: str,
+        details: ETFDetails | StockDetails,
+        quality_tier: str | None = None,
+        quality_score: int | None = None,
+    ) -> None:
+        """Upserts the latest fundamentals for an asset into the cache table.
+
+        One row per asset — subsequent calls replace the previous entry so the
+        table always holds only the most recent fetch.
+
+        Args:
+            asset_id: Database primary key of the asset.
+            asset_type: 'STOCK' or 'ETF'.
+            details: Freshly fetched fundamental data.
+            quality_tier: Evaluated quality tier (e.g., 'Tier A').
+            quality_score: Evaluated quality score (0-100).
+        """
+        fetched_at_str: str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        details_json_str: str = json.dumps(details.to_dict())
+        normalized_type: str = asset_type.upper()
+
+        try:
+            with get_db_context(str(self.db_path)) as conn:
+                initialize_database(conn)
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO asset_fundamentals
+                        (asset_id, asset_type, fetched_at, details_json,
+                         quality_tier, quality_score)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(asset_id) DO UPDATE SET
+                        asset_type = excluded.asset_type,
+                        fetched_at = excluded.fetched_at,
+                        details_json = excluded.details_json,
+                        quality_tier = excluded.quality_tier,
+                        quality_score = excluded.quality_score;
+                    """,
+                    (
+                        asset_id,
+                        normalized_type,
+                        fetched_at_str,
+                        details_json_str,
+                        quality_tier,
+                        quality_score,
+                    ),
+                )
+            logger.success(
+                f"Upserted asset_fundamentals cache for asset_id={asset_id} "
+                f"({normalized_type})."
+            )
+        except Exception as e:
+            raise StorageWriteError(
+                f"Failed to upsert asset_fundamentals for asset_id={asset_id}: {e}"
+            ) from e
+
     def save_stock_fundamentals(
         self,
         asset_id: int,

@@ -65,7 +65,9 @@ def sync_stock_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 f"Fetching details for ticker '{asset.yahoo_ticker}' "
                 f"(asset_id={asset_id})..."
             )
-            details: StockDetails | None = stock_provider.get_details(asset)
+            details: StockDetails | None = stock_provider.get_details(
+                asset, force_refresh=True
+            )
             if details is None:
                 logger.warning(
                     f"No fundamental details returned for ticker "
@@ -86,6 +88,13 @@ def sync_stock_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
 
             opportunity_repo.save_stock_fundamentals(
                 asset_id=asset_id,
+                details=details,
+                quality_tier=quality_tier,
+                quality_score=quality_score,
+            )
+            opportunity_repo.upsert_asset_fundamentals(
+                asset_id=asset_id,
+                asset_type="STOCK",
                 details=details,
                 quality_tier=quality_tier,
                 quality_score=quality_score,
@@ -148,7 +157,9 @@ def sync_etf_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
                 f"Fetching ETF details for ISIN '{asset.isin}' "
                 f"(asset_id={asset_id})..."
             )
-            details: ETFDetails | None = etf_provider.get_details(asset)
+            details: ETFDetails | None = etf_provider.get_details(
+                asset, force_refresh=True
+            )
             if details is None:
                 logger.warning(
                     f"No fundamental details returned for ETF ISIN '{asset.isin}'. "
@@ -168,6 +179,13 @@ def sync_etf_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
 
             opportunity_repo.save_etf_fundamentals(
                 asset_id=asset_id,
+                details=details,
+                quality_tier=quality_tier,
+                quality_score=quality_score,
+            )
+            opportunity_repo.upsert_asset_fundamentals(
+                asset_id=asset_id,
+                asset_type="ETF",
                 details=details,
                 quality_tier=quality_tier,
                 quality_score=quality_score,

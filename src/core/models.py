@@ -19,6 +19,8 @@ class Quotation:
     price: float
     currency: str
     timestamp: datetime = field(default_factory=datetime.now)
+    native_price: float | None = None
+    native_currency: str | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -28,6 +30,8 @@ class Quotation:
             "price": self.price,
             "currency": self.currency,
             "timestamp": self.timestamp.isoformat(),
+            "native_price": self.native_price,
+            "native_currency": self.native_currency,
         }
 
 
@@ -41,6 +45,7 @@ class Asset:
     quantity: float
     average_buy_price: float
     asset_type: str = "STOCK"
+    xtb_ticker: str | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -59,6 +64,7 @@ class Asset:
                 data.get("averageBuyPrice", data.get("average_buy_price", 0.0))
             ),
             asset_type=raw_type,
+            xtb_ticker=str(data["xtb_ticker"]) if data.get("xtb_ticker") else None,
         )
 
     @property
@@ -193,13 +199,40 @@ class CountryExposure:
 
 
 @dataclass(frozen=True, slots=True)
+class ETFMarketData:
+    """Market data for an ETF fetched from Yahoo Finance."""
+
+    price: float | None = None
+    currency: str | None = None
+    nav_price: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    fifty_two_week_change_pct: float | None = None
+    fifty_day_average: float | None = None
+    two_hundred_day_average: float | None = None
+    average_volume: int | None = None
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+
+@dataclass(frozen=True, slots=True)
 class ETFDetails:
-    """Consolidates ETF holdings, sector exposure, country exposure, and TER."""
+    """Consolidates ETF holdings, sector exposure, country exposure,
+    and fund metadata."""
 
     holdings: list[Holding]
     sector_breakdown: list[SectorExposure]
     country_breakdown: list[CountryExposure]
     ter_pct: float | None = None
+    inception_date: str | None = None
+    fund_size_eur_m: float | None = None
+    holdings_count: int | None = None
+    replication: str | None = None
+    distribution_policy: str | None = None
+    index_name: str | None = None
+    fund_currency: str | None = None
+    volatility_1y_pct: float | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -208,6 +241,14 @@ class ETFDetails:
     def from_dict(cls, data: dict[str, Any]) -> ETFDetails:
         raw_ter: Any = data.get("ter_pct")
         ter_pct: float | None = float(raw_ter) if raw_ter is not None else None
+        raw_fund_size: Any = data.get("fund_size_eur_m")
+        fund_size: float | None = (
+            float(raw_fund_size) if raw_fund_size is not None else None
+        )
+        raw_hcount: Any = data.get("holdings_count")
+        holdings_count: int | None = int(raw_hcount) if raw_hcount is not None else None
+        raw_vol: Any = data.get("volatility_1y_pct")
+        volatility: float | None = float(raw_vol) if raw_vol is not None else None
 
         return cls(
             holdings=[Holding.from_dict(item) for item in data.get("holdings", [])],
@@ -220,6 +261,14 @@ class ETFDetails:
                 for item in data.get("country_breakdown", [])
             ],
             ter_pct=ter_pct,
+            inception_date=data.get("inception_date"),
+            fund_size_eur_m=fund_size,
+            holdings_count=holdings_count,
+            replication=data.get("replication"),
+            distribution_policy=data.get("distribution_policy"),
+            index_name=data.get("index_name"),
+            fund_currency=data.get("fund_currency"),
+            volatility_1y_pct=volatility,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -228,6 +277,14 @@ class ETFDetails:
             "sector_breakdown": [item.to_dict() for item in self.sector_breakdown],
             "country_breakdown": [item.to_dict() for item in self.country_breakdown],
             "ter_pct": self.ter_pct,
+            "inception_date": self.inception_date,
+            "fund_size_eur_m": self.fund_size_eur_m,
+            "holdings_count": self.holdings_count,
+            "replication": self.replication,
+            "distribution_policy": self.distribution_policy,
+            "index_name": self.index_name,
+            "fund_currency": self.fund_currency,
+            "volatility_1y_pct": self.volatility_1y_pct,
         }
 
 
@@ -241,17 +298,34 @@ class StockDetails:
     dividend_yield_pct: float | None = None
     fifty_two_week_high: float | None = None
     fifty_two_week_low: float | None = None
+    fifty_two_week_change_pct: float | None = None
+    fifty_day_average: float | None = None
+    two_hundred_day_average: float | None = None
+    average_volume: int | None = None
     sector: str | None = None
     industry: str | None = None
+    country: str | None = None
     price_to_book: float | None = None
     peg_ratio: float | None = None
     beta: float | None = None
     profit_margins_pct: float | None = None
+    gross_margins_pct: float | None = None
+    operating_margins_pct: float | None = None
     revenue_growth_pct: float | None = None
     earnings_growth_pct: float | None = None
+    return_on_equity_pct: float | None = None
+    return_on_assets_pct: float | None = None
     total_debt_to_equity: float | None = None
+    free_cashflow: float | None = None
+    short_ratio: float | None = None
     target_mean_price: float | None = None
+    target_high_price: float | None = None
+    target_low_price: float | None = None
+    number_of_analyst_opinions: int | None = None
     recommendation_key: str | None = None
+    eps_trailing_ttm: float | None = None
+    eps_forward: float | None = None
+    currency: str | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -261,6 +335,10 @@ class StockDetails:
         def _get_float(key: str) -> float | None:
             val: Any = data.get(key)
             return float(val) if val is not None else None
+
+        def _get_int(key: str) -> int | None:
+            val: Any = data.get(key)
+            return int(val) if val is not None else None
 
         def _get_str(key: str) -> str | None:
             val: Any = data.get(key)
@@ -273,17 +351,34 @@ class StockDetails:
             dividend_yield_pct=_get_float("dividend_yield_pct"),
             fifty_two_week_high=_get_float("fifty_two_week_high"),
             fifty_two_week_low=_get_float("fifty_two_week_low"),
+            fifty_two_week_change_pct=_get_float("fifty_two_week_change_pct"),
+            fifty_day_average=_get_float("fifty_day_average"),
+            two_hundred_day_average=_get_float("two_hundred_day_average"),
+            average_volume=_get_int("average_volume"),
             sector=_get_str("sector"),
             industry=_get_str("industry"),
+            country=_get_str("country"),
             price_to_book=_get_float("price_to_book"),
             peg_ratio=_get_float("peg_ratio"),
             beta=_get_float("beta"),
             profit_margins_pct=_get_float("profit_margins_pct"),
+            gross_margins_pct=_get_float("gross_margins_pct"),
+            operating_margins_pct=_get_float("operating_margins_pct"),
             revenue_growth_pct=_get_float("revenue_growth_pct"),
             earnings_growth_pct=_get_float("earnings_growth_pct"),
+            return_on_equity_pct=_get_float("return_on_equity_pct"),
+            return_on_assets_pct=_get_float("return_on_assets_pct"),
             total_debt_to_equity=_get_float("total_debt_to_equity"),
+            free_cashflow=_get_float("free_cashflow"),
+            short_ratio=_get_float("short_ratio"),
             target_mean_price=_get_float("target_mean_price"),
+            target_high_price=_get_float("target_high_price"),
+            target_low_price=_get_float("target_low_price"),
+            number_of_analyst_opinions=_get_int("number_of_analyst_opinions"),
             recommendation_key=_get_str("recommendation_key"),
+            eps_trailing_ttm=_get_float("eps_trailing_ttm"),
+            eps_forward=_get_float("eps_forward"),
+            currency=_get_str("currency"),
         )
 
     def to_dict(self) -> dict[str, Any]:

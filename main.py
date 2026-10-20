@@ -22,8 +22,10 @@ from src.core.exposure import ExposureEngine
 from src.core.models import (
     Asset,
     ETFDetails,
+    ETFMarketData,
     GrowthProjectionResult,
     PortfolioSnapshot,
+    Quotation,
     StockDetails,
 )
 from src.core.projections import ProjectionEngine
@@ -158,37 +160,104 @@ def push_config_cmd() -> None:
         raise typer.Exit(code=1) from err
 
 
-def _display_single_etf_details(
-    isin: str, name: str, provider: ETFProvider, ticker: str | None = None
-) -> None:
+def _display_single_etf_details(asset: Asset, provider: ETFProvider) -> None:
     """Displays detailed composition and breakdowns for an ETF using Rich Panel."""
-    display_ticker: str = ticker or isin
-    dummy_asset: Asset = Asset(
-        isin=isin,
-        name=name,
-        yahoo_ticker=display_ticker,
-        quantity=0.0,
-        average_buy_price=0.0,
-        asset_type="ETF",
-    )
-    details: ETFDetails | None = provider.get_details(dummy_asset)
+    details: ETFDetails | None = provider.get_details(asset)
     if not details:
-        console.print(f"[red]Failed to fetch details for {name} ({isin}).[/red]")
+        console.print(
+            f"[red]Failed to fetch details for {asset.name} ({asset.isin}).[/red]"
+        )
         return
+
+    mkt: ETFMarketData | None = provider.get_market_data(asset)
+
+    def _fmt_float(val: float | None, suffix: str = "") -> str:
+        return f"{val:.2f}{suffix}" if val is not None else "N/A"
+
+    def _fmt_pct(val: float | None) -> str:
+        return f"{val:.2f}%" if val is not None else "N/A"
 
     ter_str: str = f"{details.ter_pct:.2f}%" if details.ter_pct is not None else "N/A"
 
     card_text: Text = Text()
     card_text.append("Asset Name: ", style="bold white")
-    card_text.append(f"{name} ({isin})\n", style="bold yellow")
+    card_text.append(f"{asset.name} ({asset.isin})\n", style="bold yellow")
     card_text.append("Asset Type: ", style="bold blue")
     card_text.append("ETF\n", style="bold blue")
+    card_text.append("Yahoo Ticker: ", style="bold white")
+    card_text.append(f"{asset.yahoo_ticker}\n", style="bold cyan")
+    if asset.xtb_ticker:
+        card_text.append("XTB Ticker: ", style="bold white")
+        card_text.append(f"{asset.xtb_ticker}\n", style="bold cyan")
+
+    if mkt:
+        currency: str = mkt.currency or "EUR"
+        nav_currency: str = details.fund_currency or currency
+        card_text.append("Price: ", style="bold white")
+        card_text.append(f"{_fmt_float(mkt.price)} {currency}\n", style="bold green")
+        card_text.append("NAV: ", style="bold white")
+        card_text.append(
+            f"{_fmt_float(mkt.nav_price)} {nav_currency}\n", style="bold green"
+        )
+        card_text.append("52W High: ", style="bold white")
+        card_text.append(
+            f"{_fmt_float(mkt.fifty_two_week_high)} {currency}  ", style="bold green"
+        )
+        card_text.append("52W Low: ", style="bold white")
+        card_text.append(
+            f"{_fmt_float(mkt.fifty_two_week_low)} {currency}\n", style="bold green"
+        )
+        card_text.append("52W Change: ", style="bold white")
+        card_text.append(
+            f"{_fmt_pct(mkt.fifty_two_week_change_pct)}\n", style="bold green"
+        )
+        card_text.append("50D Avg: ", style="bold white")
+        card_text.append(
+            f"{_fmt_float(mkt.fifty_day_average)} {currency}  ", style="bold green"
+        )
+        card_text.append("200D Avg: ", style="bold white")
+        card_text.append(
+            f"{_fmt_float(mkt.two_hundred_day_average)} {currency}\n",
+            style="bold green",
+        )
+        card_text.append("Avg Volume: ", style="bold white")
+        card_text.append(
+            f"{mkt.average_volume:,}\n" if mkt.average_volume else "N/A\n",
+            style="bold green",
+        )
+
     card_text.append("TER: ", style="bold white")
     card_text.append(f"{ter_str}\n", style="bold green")
+    if details.index_name:
+        card_text.append("Index: ", style="bold white")
+        card_text.append(f"{details.index_name}\n", style="bold green")
+    if details.fund_size_eur_m is not None:
+        card_text.append("Fund Size: ", style="bold white")
+        card_text.append(f"EUR {details.fund_size_eur_m:,.0f}m\n", style="bold green")
+    if details.holdings_count is not None:
+        card_text.append("Holdings Count: ", style="bold white")
+        card_text.append(f"{details.holdings_count:,}\n", style="bold green")
+    if details.replication:
+        card_text.append("Replication: ", style="bold white")
+        card_text.append(f"{details.replication}\n", style="bold green")
+    if details.distribution_policy:
+        card_text.append("Distribution: ", style="bold white")
+        card_text.append(f"{details.distribution_policy}\n", style="bold green")
+    if details.fund_currency:
+        card_text.append("Fund Currency: ", style="bold white")
+        card_text.append(f"{details.fund_currency}\n", style="bold green")
+    if details.inception_date:
+        card_text.append("Inception Date: ", style="bold white")
+        card_text.append(f"{details.inception_date}\n", style="bold green")
+    if details.volatility_1y_pct is not None:
+        card_text.append("Volatility 1Y: ", style="bold white")
+        card_text.append(f"{details.volatility_1y_pct:.2f}%\n", style="bold green")
 
     if details.holdings:
         card_text.append("\nTop Holdings:\n", style="bold underline")
-        for h in details.holdings[:10]:
+        for h in details.holdings:
+            if h.weight_pct <= 0:
+                continue
             h_isin: str = f" ({h.isin})" if h.isin else ""
             card_text.append("  • ", style="dim")
             card_text.append(f"{h.name}{h_isin}: ", style="bold white")
@@ -196,21 +265,25 @@ def _display_single_etf_details(
 
     if details.sector_breakdown:
         card_text.append("\nSector Breakdown:\n", style="bold underline")
-        for s in details.sector_breakdown[:5]:
+        for s in details.sector_breakdown:
+            if s.weight_pct <= 0:
+                continue
             card_text.append("  • ", style="dim")
             card_text.append(f"{s.sector_name}: ", style="bold white")
             card_text.append(f"{s.weight_pct:.2f}%\n")
 
     if details.country_breakdown:
         card_text.append("\nCountry Breakdown:\n", style="bold underline")
-        for c in details.country_breakdown[:5]:
+        for c in details.country_breakdown:
+            if c.weight_pct <= 0:
+                continue
             card_text.append("  • ", style="dim")
             card_text.append(f"{c.country_name}: ", style="bold white")
             card_text.append(f"{c.weight_pct:.2f}%\n")
 
     panel: Panel = Panel(
         card_text,
-        title=f"[bold cyan]ETF DETAILS - {display_ticker}[/bold cyan]",
+        title=f"[bold cyan]ETF DETAILS - {asset.yahoo_ticker}[/bold cyan]",
     )
     console.print(panel)
 
@@ -248,9 +321,15 @@ def etf_details_cmd(
                 (a for a in assets_lookup if a.isin and a.isin.upper() == clean_isin),
                 None,
             )
-            asset_name: str = matched_asset.name if matched_asset else clean_isin
-            ticker: str = matched_asset.yahoo_ticker if matched_asset else clean_isin
-            _display_single_etf_details(clean_isin, asset_name, provider, ticker=ticker)
+            display_asset: Asset = matched_asset or Asset(
+                isin=clean_isin,
+                name=clean_isin,
+                yahoo_ticker=clean_isin,
+                quantity=0.0,
+                average_buy_price=0.0,
+                asset_type="ETF",
+            )
+            _display_single_etf_details(display_asset, provider)
             return
 
         try:
@@ -269,9 +348,7 @@ def etf_details_cmd(
             return
 
         for asset in etf_assets:
-            _display_single_etf_details(
-                asset.isin, asset.name, provider, ticker=asset.yahoo_ticker
-            )
+            _display_single_etf_details(asset, provider)
     except typer.Exit:
         raise
     except Exception as err:
@@ -295,7 +372,8 @@ def _format_market_cap(val: float | None) -> str:
 def _display_single_stock_details(
     ticker: str, name: str, provider: StockProvider
 ) -> None:
-    """Displays fundamental financial metrics for a single stock using Rich Panel."""
+    """Displays all fundamental and market metrics for a single stock
+    using Rich Panel."""
     dummy_asset: Asset = Asset(
         isin=ticker if len(ticker) == 12 else "",
         name=name,
@@ -304,25 +382,45 @@ def _display_single_stock_details(
         average_buy_price=0.0,
         asset_type="STOCK",
     )
+
+    quote: Quotation | None = provider.get_price(dummy_asset)
     details: StockDetails | None = provider.get_details(dummy_asset)
+
     if not details:
         console.print(
             f"[red]Failed to fetch fundamental metrics for {name} ({ticker}).[/red]"
         )
         return
 
-    mcap_str: str = _format_market_cap(details.market_cap)
-    pe_str: str = f"{details.pe_ratio:.2f}" if details.pe_ratio is not None else "N/A"
-    fwd_str: str = (
-        f"{details.forward_pe:.2f}" if details.forward_pe is not None else "N/A"
-    )
-    div_str: str = (
-        f"{details.dividend_yield_pct:.2f}%"
-        if details.dividend_yield_pct is not None
-        else "N/A"
-    )
+    # quote.currency is the display currency after FX conversion (always EUR for
+    # non-EUR assets). details.currency is the native quote currency from Yahoo
+    # (e.g. DKK for NOVO-B.CO). Price/market fields from get_price are in
+    # quote_currency; fundamental fields stored in StockDetails are in native_currency.
+    quote_currency: str = quote.currency if quote else (details.currency or "")
+    native_currency: str = details.currency or quote_currency
+
+    def _fmt(val: float | None, decimals: int = 2, suffix: str = "") -> str:
+        if val is None:
+            return "N/A"
+        return f"{val:.{decimals}f}{suffix}"
+
+    def _fmt_pct(val: float | None) -> str:
+        if val is None:
+            return "N/A"
+        return f"{val:.2f}%"
+
+    def _fmt_vol(val: int | None) -> str:
+        if val is None:
+            return "N/A"
+        if val >= 1_000_000:
+            return f"{val / 1_000_000:.2f}M"
+        if val >= 1_000:
+            return f"{val / 1_000:.1f}K"
+        return str(val)
 
     card_text: Text = Text()
+
+    # Identity
     card_text.append("Asset Name: ", style="bold white")
     card_text.append(f"{name} ({ticker})\n", style="bold yellow")
     card_text.append("Asset Type: ", style="bold white")
@@ -331,14 +429,93 @@ def _display_single_stock_details(
     card_text.append(f"{details.sector or 'N/A'}\n")
     card_text.append("Industry: ", style="bold white")
     card_text.append(f"{details.industry or 'N/A'}\n")
+    card_text.append("Country: ", style="bold white")
+    card_text.append(f"{details.country or 'N/A'}\n")
+
+    # Price & market data
+    card_text.append("\n── Price & Market Data ──\n", style="dim")
+    if quote:
+        card_text.append("Price: ", style="bold white")
+        card_text.append(f"{quote.price:.2f} {quote_currency}\n", style="bold green")
     card_text.append("Market Cap: ", style="bold white")
-    card_text.append(f"{mcap_str}\n", style="yellow")
-    card_text.append("P/E Ratio: ", style="bold white")
-    card_text.append(f"{pe_str}\n")
-    card_text.append("Forward P/E: ", style="bold white")
-    card_text.append(f"{fwd_str}\n")
+    card_text.append(f"{_format_market_cap(details.market_cap)}\n", style="yellow")
+    card_text.append("52W High: ", style="bold white")
+    card_text.append(f"{_fmt(details.fifty_two_week_high)} {native_currency}\n")
+    card_text.append("52W Low: ", style="bold white")
+    card_text.append(f"{_fmt(details.fifty_two_week_low)} {native_currency}\n")
+    card_text.append("52W Change: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.fifty_two_week_change_pct)}\n")
+    card_text.append("50D Average: ", style="bold white")
+    card_text.append(f"{_fmt(details.fifty_day_average)} {native_currency}\n")
+    card_text.append("200D Average: ", style="bold white")
+    card_text.append(f"{_fmt(details.two_hundred_day_average)} {native_currency}\n")
+    card_text.append("Avg Volume: ", style="bold white")
+    card_text.append(f"{_fmt_vol(details.average_volume)}\n")
+
+    # Valuation
+    card_text.append("\n── Valuation ──\n", style="dim")
+    card_text.append("P/E (Trailing): ", style="bold white")
+    card_text.append(f"{_fmt(details.pe_ratio)}\n")
+    card_text.append("P/E (Forward): ", style="bold white")
+    card_text.append(f"{_fmt(details.forward_pe)}\n")
+    card_text.append("PEG Ratio: ", style="bold white")
+    card_text.append(f"{_fmt(details.peg_ratio)}\n")
+    card_text.append("P/B Ratio: ", style="bold white")
+    card_text.append(f"{_fmt(details.price_to_book)}\n")
+    card_text.append("EPS (TTM): ", style="bold white")
+    card_text.append(f"{_fmt(details.eps_trailing_ttm)} {native_currency}\n")
+    card_text.append("EPS (Forward): ", style="bold white")
+    card_text.append(f"{_fmt(details.eps_forward)} {native_currency}\n")
+    card_text.append("Beta: ", style="bold white")
+    card_text.append(f"{_fmt(details.beta)}\n")
     card_text.append("Dividend Yield: ", style="bold white")
-    card_text.append(f"{div_str}\n", style="green")
+    card_text.append(f"{_fmt_pct(details.dividend_yield_pct)}\n", style="green")
+
+    # Profitability & growth
+    card_text.append("\n── Profitability & Growth ──\n", style="dim")
+    card_text.append("Gross Margin: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.gross_margins_pct)}\n")
+    card_text.append("Operating Margin: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.operating_margins_pct)}\n")
+    card_text.append("Profit Margin: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.profit_margins_pct)}\n")
+    card_text.append("Revenue Growth (YoY): ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.revenue_growth_pct)}\n")
+    card_text.append("Earnings Growth (YoY): ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.earnings_growth_pct)}\n")
+    card_text.append("Return on Equity: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.return_on_equity_pct)}\n")
+    card_text.append("Return on Assets: ", style="bold white")
+    card_text.append(f"{_fmt_pct(details.return_on_assets_pct)}\n")
+
+    # Financial health
+    card_text.append("\n── Financial Health ──\n", style="dim")
+    card_text.append("Debt/Equity: ", style="bold white")
+    card_text.append(f"{_fmt(details.total_debt_to_equity)}\n")
+    card_text.append("Free Cash Flow: ", style="bold white")
+    fcf_str: str = (
+        _format_market_cap(details.free_cashflow) if details.free_cashflow else "N/A"
+    )
+    card_text.append(f"{fcf_str}\n")
+    card_text.append("Short Ratio: ", style="bold white")
+    card_text.append(f"{_fmt(details.short_ratio)}\n")
+
+    # Analyst consensus
+    card_text.append("\n── Analyst Consensus ──\n", style="dim")
+    card_text.append("Recommendation: ", style="bold white")
+    rec: str = (details.recommendation_key or "N/A").upper()
+    rec_style: str = (
+        "bold green" if rec == "BUY" else "bold red" if rec == "SELL" else "yellow"
+    )
+    card_text.append(f"{rec}\n", style=rec_style)
+    card_text.append("Target (Mean): ", style="bold white")
+    card_text.append(f"{_fmt(details.target_mean_price)} {native_currency}\n")
+    card_text.append("Target (High): ", style="bold white")
+    card_text.append(f"{_fmt(details.target_high_price)} {native_currency}\n")
+    card_text.append("Target (Low): ", style="bold white")
+    card_text.append(f"{_fmt(details.target_low_price)} {native_currency}\n")
+    card_text.append("# Analysts: ", style="bold white")
+    card_text.append(f"{details.number_of_analyst_opinions or 'N/A'}\n")
 
     panel: Panel = Panel(
         card_text,

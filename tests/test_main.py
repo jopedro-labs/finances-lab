@@ -24,8 +24,10 @@ from src.core.models import (
     Asset,
     CountryExposure,
     ETFDetails,
+    ETFMarketData,
     Holding,
     PortfolioSnapshot,
+    Quotation,
     SectorExposure,
     StockDetails,
 )
@@ -336,9 +338,16 @@ def test_display_single_etf_details_provider_exception() -> None:
     """Tests _display_single_etf_details when provider raises an exception."""
     mock_provider: MagicMock = MagicMock()
     mock_provider.get_details.side_effect = RuntimeError("Scraper failed")
-
+    asset: Asset = Asset(
+        isin="IE00B4L5Y983",
+        name="Test ETF",
+        yahoo_ticker="EUNL.DE",
+        quantity=0.0,
+        average_buy_price=0.0,
+        asset_type="ETF",
+    )
     with pytest.raises(RuntimeError, match="Scraper failed"):
-        _display_single_etf_details("IE00B4L5Y983", "Test ETF", mock_provider)
+        _display_single_etf_details(asset, mock_provider)
     mock_provider.get_details.assert_called_once()
 
 
@@ -346,8 +355,15 @@ def test_display_single_etf_details_provider_returns_none() -> None:
     """Tests _display_single_etf_details when provider returns None."""
     mock_provider: MagicMock = MagicMock()
     mock_provider.get_details.return_value = None
-
-    _display_single_etf_details("IE00B4L5Y983", "Test ETF", mock_provider)
+    asset: Asset = Asset(
+        isin="IE00B4L5Y983",
+        name="Test ETF",
+        yahoo_ticker="EUNL.DE",
+        quantity=0.0,
+        average_buy_price=0.0,
+        asset_type="ETF",
+    )
+    _display_single_etf_details(asset, mock_provider)
     mock_provider.get_details.assert_called_once()
 
 
@@ -386,6 +402,9 @@ def test_etf_details_cmd_single_isin_success(
         country_breakdown=[CountryExposure(country_name="USA", weight_pct=70.0)],
         ter_pct=0.20,
     )
+    mock_provider.get_market_data.return_value = ETFMarketData(
+        price=95.0, currency="EUR"
+    )
 
     result: Any = runner.invoke(app, ["etf-details", "IE00B4L5Y983"])
 
@@ -395,6 +414,7 @@ def test_etf_details_cmd_single_isin_success(
     assert "0.20%" in result.output
     assert "Apple" in result.output
     assert "5.00%" in result.output
+    assert "95.00 EUR" in result.output
 
 
 def test_etf_details_cmd_invalid_isin() -> None:
@@ -423,6 +443,7 @@ def test_etf_details_cmd_single_isin_repo_exception(
         country_breakdown=[],
         ter_pct=0.15,
     )
+    mock_provider.get_market_data.return_value = None
 
     result: Any = runner.invoke(app, ["etf-details", "IE00B4L5Y983"])
 
@@ -452,6 +473,7 @@ def test_etf_details_cmd_empty_breakdowns_and_holding_without_isin(
         country_breakdown=[],
         ter_pct=None,
     )
+    mock_provider.get_market_data.return_value = None
 
     result: Any = runner.invoke(app, ["etf-details", "IE00B4L5Y983"])
 
@@ -489,6 +511,9 @@ def test_etf_details_cmd_all_etfs_success(
         sector_breakdown=[],
         country_breakdown=[],
         ter_pct=0.20,
+    )
+    mock_provider.get_market_data.return_value = ETFMarketData(
+        price=88.50, currency="EUR"
     )
 
     result: Any = runner.invoke(app, ["etf-details"])
@@ -591,6 +616,7 @@ def test_stock_details_cmd_single_stock_success_with_all_metrics(
         )
     ]
 
+    mock_provider.get_price.return_value = Quotation(price=180.0, currency="USD")
     mock_provider.get_details.return_value = StockDetails(
         sector="Technology",
         industry="Consumer Electronics",
@@ -598,6 +624,7 @@ def test_stock_details_cmd_single_stock_success_with_all_metrics(
         pe_ratio=30.0,
         forward_pe=25.0,
         dividend_yield_pct=0.5,
+        currency="USD",
     )
 
     result: Any = runner.invoke(app, ["stock-details", "AAPL"])
@@ -606,7 +633,7 @@ def test_stock_details_cmd_single_stock_success_with_all_metrics(
     assert "STOCK DETAILS - AAPL" in result.output
     assert "Sector:" in result.output
     assert "Technology" in result.output
-    assert "P/E Ratio:" in result.output
+    assert "P/E (Trailing):" in result.output
 
 
 @patch("main.StockProvider")
@@ -631,6 +658,7 @@ def test_stock_details_cmd_matched_by_isin(
         )
     ]
 
+    mock_provider.get_price.return_value = Quotation(price=300.0, currency="USD")
     mock_provider.get_details.return_value = StockDetails(
         sector="Software",
         industry="Infrastructure Software",
@@ -638,6 +666,7 @@ def test_stock_details_cmd_matched_by_isin(
         pe_ratio=32.0,
         forward_pe=28.0,
         dividend_yield_pct=0.8,
+        currency="USD",
     )
 
     result: Any = runner.invoke(app, ["stock-details", "US5949181045"])
@@ -659,6 +688,7 @@ def test_stock_details_cmd_single_stock_repo_exception(
     mock_repo_cls.return_value = mock_repo
     mock_repo.load_assets.side_effect = Exception("DB Error")
 
+    mock_provider.get_price.return_value = Quotation(price=100.0, currency="USD")
     mock_provider.get_details.return_value = StockDetails(
         sector="Tech",
         industry="Hardware",
@@ -666,6 +696,7 @@ def test_stock_details_cmd_single_stock_repo_exception(
         pe_ratio=10.0,
         forward_pe=8.0,
         dividend_yield_pct=1.0,
+        currency="USD",
     )
 
     result: Any = runner.invoke(app, ["stock-details", "AAPL"])
@@ -683,6 +714,7 @@ def test_stock_details_cmd_formatting_none_fields(
     mock_provider: MagicMock = MagicMock()
     mock_provider_cls.return_value = mock_provider
 
+    mock_provider.get_price.return_value = None
     mock_provider.get_details.return_value = StockDetails(
         sector=None,
         industry=None,
@@ -721,6 +753,7 @@ def test_stock_details_cmd_all_stocks_success(
         )
     ]
 
+    mock_provider.get_price.return_value = Quotation(price=200.0, currency="USD")
     mock_provider.get_details.return_value = StockDetails(
         sector="Automotive",
         industry="EV",
@@ -728,6 +761,7 @@ def test_stock_details_cmd_all_stocks_success(
         pe_ratio=40.0,
         forward_pe=35.0,
         dividend_yield_pct=0.0,
+        currency="USD",
     )
 
     result: Any = runner.invoke(app, ["stock-details"])
