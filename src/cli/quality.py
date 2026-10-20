@@ -21,7 +21,7 @@ from src.core.exceptions import StorageError
 from src.core.models import Asset, ETFDetails, StockDetails
 from src.core.providers import ETFProvider, StockProvider
 from src.core.repositories import SqlitePortfolioRepository
-from src.infra.database.connection import DEFAULT_DB_PATH
+from src.infra.database.connection import DEFAULT_DB_PATH, get_db_context
 from src.infra.notifications.discord import (
     send_quality_notification,
 )
@@ -117,8 +117,7 @@ def save_quality_to_database(
     fetched_at_str: str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        conn = sqlite3.connect(db_path)
-        with conn:
+        with get_db_context(db_path) as conn:
             cursor: sqlite3.Cursor = conn.cursor()
             for item in evaluated_assets:
                 symbol_str: str = str(item["symbol"])
@@ -238,8 +237,6 @@ def save_quality_to_database(
                             quality_score,
                         ),
                     )
-            # Commit is handled by with conn context manager on success
-        conn.close()
         logger.success(
             "Successfully persisted quality evaluation metrics "
             "and history into SQLite database."

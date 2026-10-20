@@ -21,7 +21,11 @@ class ProjectionPresenter:
         """Renders an executive summary panel."""
         init_val = f"€{result.initial_value:,.2f}"
         monthly_val = f"€{result.monthly_contribution:,.2f}"
-        cagr_val = f"{result.historical_cagr_pct:.2%}"
+        cagr_val = (
+            f"{result.historical_cagr_pct:.2%}"
+            if result.historical_cagr_pct is not None
+            else "N/A"
+        )
 
         summary = (
             f"[bold]Initial Capital:[/bold] [bold yellow]{init_val}[/bold yellow]\n"

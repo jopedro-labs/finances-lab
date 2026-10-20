@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src.config import settings
+from src.config import DATA_DIR, settings
 from src.core.currency_exchange import get_exchange_rate
 from src.core.exceptions import StorageError
 from src.core.models import Asset, AssetSnapshot, PortfolioSnapshot, Quotation
@@ -21,6 +21,7 @@ from src.core.repositories import (
     SqlitePortfolioRepository,
 )
 from src.infra.database.connection import DEFAULT_DB_PATH
+from src.infra.gdrive.service import GDriveService
 from src.utils.logger.logger import logger
 
 
@@ -163,10 +164,8 @@ def display_snapshot(snapshot_data: PortfolioSnapshot | dict[str, Any]) -> None:
 def trigger_gdrive_backup(file_path: Path, folder_id: str | None = None) -> bool:
     """Triggers non-blocking backup of a persistence file to Google Drive."""
     try:
-        from src.infra.gdrive.service import GoogleDriveService
-
         target_folder: str | None = folder_id or settings.gdrive_snapshot_folder_id
-        service: GoogleDriveService = GoogleDriveService(folder_id=target_folder)
+        service: GDriveService = GDriveService(folder_id=target_folder)
         success: bool = service.backup_file(file_path)
         if success:
             logger.success(f"Google Drive backup successful for '{file_path.name}'.")
@@ -208,6 +207,6 @@ def save_snapshot(
         if db_file.exists():
             trigger_gdrive_backup(db_file)
 
-        history_json: Path = Path("data/history.json")
+        history_json: Path = DATA_DIR / "history.json"
         if history_json.exists():
             trigger_gdrive_backup(history_json)
