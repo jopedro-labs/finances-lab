@@ -26,7 +26,7 @@ def test_settings_default_values() -> None:
     with patch.dict("os.environ", clear=True):
         s: Settings = Settings(_env_file=None)
 
-    assert s.gemini_model == "gemini-2.0-flash"
+    assert s.gemini_model == "gemini-3.6-flash"
     assert s.discord_test_mode is False
     assert s.etf_cache_ttl_days == 30
     assert s.min_drop_pct == 5.0

@@ -47,13 +47,11 @@ Copy `.env.example` to `.env` and populate your credentials:
 
 ```ini
 GEMINI_API_KEY=your_AIza_key_here
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.6-flash
 
 GDRIVE_CLIENT_SECRET_FILE=secrets/credentials.json
 GDRIVE_TOKEN_FILE=secrets/token.json
 GDRIVE_CONFIG_FOLDER_ID=your_folder_id
-GDRIVE_SNAPSHOT_FOLDER_ID=your_folder_id
-GDRIVE_REPORTS_FOLDER_ID=your_folder_id
 GDRIVE_DATABASE_FOLDER_ID=your_folder_id
 
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
@@ -78,7 +76,7 @@ make update-finances
 
 ## System Architecture
 
-The repository follows a modular architecture segregating domain entities, infrastructure providers, scoring strategies, analytics, notifications, and presentation layers.
+The repository follows a **Clean Architecture / Ports-and-Adapters** pattern with three strict layers: `cli` (presentation), `core` (pure domain), `infra` (external adapters).
 
 ```mermaid
 graph TD
@@ -95,21 +93,21 @@ graph TD
     Report --> ReportGen
 ```
 
-| Layer                    | Path                                | Description |
-|:-------------------------|:------------------------------------|:------------|
-| **CLI & Presentation**   | `src/cli/` & `main.py`              | Typer-powered CLI entrypoints (`dashboard`, `report`, `opportunity`, `analyze-quality`, `sync-fundamentals`, `project-growth`). |
-| **Core Domain Models**   | `src/core/models.py`                | Immutable domain dataclasses (`Asset`, `Quotation`, `PortfolioSnapshot`, `GrowthProjectionScenario`, etc.). |
-| **Projections Engine**   | `src/core/projections.py`           | Compound growth forecasting with inflation adjustment over 10, 20, and 30-year horizons. |
-| **Scoring Strategies**   | `src/core/opportunity_evaluation/`  | Strategy pattern orchestrating asset priority scoring (`dip_score`, `cost_score`, `allocation_score`) with exposure penalty multipliers. |
-| **Exposure Engine**      | `src/core/exposure.py`              | Consolidates look-through sector, geographic, and company allocations across direct equities and ETFs. |
-| **Analytics Engine**     | `src/core/portfolio_analytics.py`   | Historical time-series processing, ATH tracking, drawdown analysis, and ROI calculation. |
-| **HTML Report Generator**| `src/infra/report_generator.py`     | Generates a self-contained dark-theme HTML report with three navigable tabs: Portfolio, Quality, and Opportunity. |
-| **AI Advisory**          | `src/infra/ai/`                     | Google Gemini API client executing batch structured JSON portfolio analysis with exponential backoff retry. |
-| **Discord Notifications**| `src/infra/notifications/`          | Discord webhook integration formatting rich embeds, decision matrices, and recommendation action cards. |
-| **Relational Storage**   | `src/infra/database/`               | SQLite connection management, transactional contexts, DDL schema, and historical query extractors. |
-| **Cloud SSoT Engine**    | `src/infra/gdrive/`                 | Google Drive service wrapper handling bidirectional synchronisation of `finances.db` and configuration files. |
-| **JustETF Scraper**      | `src/infra/justetf/`                | Web scraper retrieving ETF compositions, sector weights, country allocations, and TER metrics. |
-| **Graphics & Utilities** | `src/utils/`                        | Matplotlib chart exporters (smooth Catmull-Rom curves), Jinja2 rendering helper, and ANSI-coloured terminal logging. |
+| Layer | Path | Description |
+|:------|:-----|:------------|
+| **CLI & Presentation** | `src/cli/` & `main.py` | Typer-powered CLI entrypoints (`dashboard`, `report`, `opportunity_evaluation`, `analyze-quality`, `sync-fundamentals`, `project-growth`). |
+| **Core Domain Models** | `src/core/models.py` | Immutable domain dataclasses (`Asset`, `Quotation`, `PortfolioSnapshot`, `GrowthProjectionScenario`, etc.). |
+| **Projections Engine** | `src/core/projections.py` | Compound growth forecasting with inflation adjustment over 10, 20, and 30-year horizons. |
+| **Scoring Strategies** | `src/core/opportunity_evaluation/` | Strategy pattern orchestrating asset priority scoring (`dip_score`, `cost_score`, `allocation_score`) with exposure penalty multipliers. |
+| **Exposure Engine** | `src/core/exposure.py` | Consolidates look-through sector, geographic, and company allocations across direct equities and ETFs. |
+| **Analytics Engine** | `src/core/portfolio_analytics.py` | Historical time-series processing, ATH tracking, drawdown analysis, and ROI calculation. |
+| **HTML Report Generator** | `src/infra/report_generator.py` | Generates a self-contained dark-theme HTML report with three navigable tabs: Portfolio, Quality, and Opportunity. |
+| **AI Advisory** | `src/infra/ai/` | Google Gemini API client executing batch structured JSON portfolio analysis with exponential backoff retry. |
+| **Discord Notifications** | `src/infra/notifications/` | Discord webhook integration formatting rich embeds, decision matrices, and recommendation action cards. |
+| **Relational Storage** | `src/infra/database/` | SQLite connection management, transactional contexts, DDL schema with auto-migrations, and historical query extractors. |
+| **Cloud SSoT Engine** | `src/infra/gdrive/` | Google Drive service wrapper handling bidirectional synchronisation of `finances.db` and configuration files. Supports both OAuth2 and service account authentication. |
+| **JustETF Scraper** | `src/infra/justetf/` | Web scraper retrieving ETF compositions, sector weights, country allocations, and TER metrics with `Retry-After` header support. |
+| **Graphics & Utilities** | `src/utils/` | Matplotlib chart exporters (smooth Catmull-Rom curves), Jinja2 rendering helper, and Rich-based structured terminal logging. |
 
 ---
 
@@ -119,7 +117,7 @@ graph TD
 
 Rather than relying solely on AI outputs, the system uses deterministic multi-factor scoring strategies:
 
-- **Stock Strategy** (`stock_strategy.py`): Evaluates price pullbacks from recent peaks using a trapezoidal sweet-spot curve (penalising falling knives), forward vs. trailing P/E growth ratios, positioning relative to the 52-week range (with FX-adjusted high/low for non-EUR tickers), and normalised allocation gaps against a configurable absolute target.
+- **Stock Strategy** (`stock_strategy.py`): Evaluates price pullbacks from recent peaks using a trapezoidal sweet-spot curve (penalising falling knives), forward vs. trailing P/E growth ratios, positioning relative to the 52-week range (with FX-adjusted high/low for non-EUR tickers), and normalised allocation gaps against a configurable absolute target. Default weights: dip **0.35**, forward P/E **0.35**, 52-week range **0.15**, allocation gap **0.15**.
 - **ETF Strategy** (`etf_strategy.py`): Evaluates technical discount sweet-spots, cost efficiency via Total Expense Ratio (TER), and allocation gaps using an **absolute magnitude** formula (`gap / normalizer_pct`, default 15%) — ensuring larger absolute targets always rank above smaller ones even in a cold-start portfolio where all current allocations are zero. Default weights: dip **0.35**, TER **0.20**, allocation **0.45**.
 - **Exposure Penalty Multipliers**: Multiplicatively scales down the `total_score` of assets that breach configured sector, country, or single-company concentration thresholds.
 
@@ -147,7 +145,7 @@ Rather than relying solely on AI outputs, the system uses deterministic multi-fa
 - **Inflation Adjustment**: Discounts future nominal totals by a 2% annual inflation target to reflect purchasing power in today's Euros.
 - **Historical CAGR Baseline**: Automatically computes the Compound Annual Growth Rate from SQLite history. For periods under 1 year, uses Absolute Return to maintain realistic projections.
 
-### 6. Unified HTML Report (`portfolio_report.html`)
+### 6. Unified HTML Report
 
 The central report is a single self-contained HTML file at `output/reports/portfolio_report.html`, rendered from a Jinja2 dark-theme template. It is organised into three navigable tabs:
 
@@ -161,7 +159,7 @@ All charts are clickable to open a full-screen lightbox overlay. The HTML file i
 
 ### 7. Gemini AI Batch Advisory
 
-- **Enterprise Client**: Powered by Google Gemini AI via the Google GenAI SDK, with exponential backoff retry for transient errors and quota exhaustion.
+- **Enterprise Client**: Powered by Google Gemini AI (`gemini-2.0-flash` by default) via the Google GenAI SDK, with exponential backoff retry for transient errors and quota exhaustion.
 - **Batch Portfolio Analysis**: Processes the entire target asset list in a single API call, returning structured JSON validated through Pydantic (`BatchRebalanceRecommendations`).
 - **Persistent Storage**: Advisory data (reasoning, valuation metrics, factor scores) is serialised as JSON and persisted to the `opportunity_asset_metrics` table, enabling historical replay in reports without re-running the AI.
 - **Graceful Fallback**: Automatically falls back to the quantitative opportunity matrix if AI is unavailable or `--skip-ai` is passed.
@@ -174,7 +172,8 @@ All charts are clickable to open a full-screen lightbox overlay. The HTML file i
 ### 9. Cloud SSoT Architecture
 
 - **Stateless Local Environment**: The local `data/` directory is ephemeral and excluded from Git.
-- **Bidirectional Sync**: On `make pull-config`, required operational files (`finances.db`, `portfolio.json`, `portfolio_targets.json`, `etf_cache.json`, `system_instruction.json`) are downloaded from Google Drive. On `make push-config`, the updated database is uploaded back.
+- **Bidirectional Sync**: On `make pull-config`, required operational files (`finances.db`, `portfolio.json`, `portfolio_targets.json`, `etf_cache.json`) are downloaded from Google Drive. On `make push-config`, the updated database is uploaded back.
+- **Authentication**: Supports both OAuth2 (interactive browser flow via `secrets/credentials.json`) and service account (`GDRIVE_SERVICE_ACCOUNT_FILE`) for headless CI environments.
 - **Reports are Derived Artifacts**: HTML reports in `output/` are regenerable at any time via `make report` and are excluded from version control and cloud sync.
 
 ---
@@ -237,7 +236,7 @@ The central `finances.db` SQLite database is managed via transactional contexts 
 
 ```bash
 make migrate
-# or: python -m src.migrate_json_to_sqlite
+# or: python src/migrate_json_to_sqlite.py
 ```
 
 ---
@@ -263,6 +262,9 @@ make report
 
 # Generate without opening browser (CI / headless)
 make report FLAGS="--no-browser"
+
+# With custom monthly contribution projection
+make report FLAGS="--monthly-contribution 500"
 ```
 
 The report is written to `output/reports/portfolio_report.html` with three tabs: Portfolio, Quality, and Opportunity.
@@ -278,6 +280,9 @@ make dashboard TICKER="AAPL"
 
 # Export visual performance charts to output/plots/
 make dashboard FLAGS="--export-plots"
+
+# Dispatch dashboard summary to Discord
+make dashboard FLAGS="--notify"
 ```
 
 ### Rebalancing & Quality Analysis
@@ -300,19 +305,40 @@ make analyze-quality
 
 # Quality evaluation for a specific asset
 make analyze-quality TICKER="AAPL"
+
+# Dispatch quality results to Discord
+make analyze-quality FLAGS="--notify"
 ```
 
 ### Growth Projections
 
 ```bash
-# Project long-term portfolio growth (10y, 20y, 30y), Conservative / Moderate / Aggressive
+# Project long-term portfolio growth (10y, 20y, 30y) — Conservative / Moderate / Aggressive
 make project-growth
 
 # With custom monthly contribution
 make project-growth FLAGS="--monthly-contribution 500"
+
+# With custom expected return and initial value
+python main.py project-growth --initial-value 50000 --expected-return 0.08 --monthly-contribution 300
 ```
 
-### Data Sync & Inspection
+### Asset Inspection
+
+```bash
+# Inspect ETF composition, TER, holdings, and sector/country breakdowns (all ETFs)
+make etf-details
+# or: python main.py etf-details IE00BK5BQT36
+
+# Inspect fundamental metrics for stocks (all stocks)
+make stock-details
+# or: python main.py stock-details AAPL
+
+# Inspect consolidated sector, country, and company look-through exposure
+make exposure
+```
+
+### Data Sync
 
 ```bash
 # Pull configuration and database from Google Drive
@@ -327,33 +353,22 @@ make sync-portfolio
 # Save timestamped portfolio valuation snapshot
 make save-snapshot
 
-# Synchronise live fundamental data into SQLite history
+# Synchronise live fundamental data into SQLite (bypasses cache)
 make sync-fundamentals
-
-# Inspect consolidated sector, country, and company look-through exposure
-make exposure
-
-# Inspect ETF composition, TER, holdings, and sector/country breakdowns
-make etf-details
-# or: python main.py etf-details IE00BK5BQT36
-
-# Inspect fundamental metrics for a stock
-make stock-details
-# or: python main.py stock-details AAPL
 ```
 
 ---
 
 ## Quality Gates & Testing
 
-| Target                | Description |
-|:----------------------|:------------|
-| `make quality`        | Full quality pipeline: Black, Ruff, Mypy, Bandit, Pip-Audit, Pytest. |
-| `make test`           | Unit tests with branch coverage report. |
-| `make format`         | Auto-format with Black and fix lint issues with Ruff. |
-| `make lint`           | Formatting check (Black), linting (Ruff), and type checking (Mypy). |
+| Target | Description |
+|:-------|:------------|
+| `make quality` | Full quality pipeline: Black, Ruff, Mypy, Bandit, Pip-Audit, Pytest. |
+| `make test` | Unit tests with branch coverage report (term + XML + HTML). |
+| `make format` | Auto-format with Black and fix lint issues with Ruff. |
+| `make lint` | Formatting check (Black), linting (Ruff), and type checking (Mypy strict). |
 | `make security-check` | SAST scan (Bandit) and dependency vulnerability audit (Pip-Audit). |
-| `make clean`          | Remove cache files, coverage reports, and build artifacts. |
+| `make clean` | Remove cache files, coverage reports, and build artifacts. |
 
 CI runs automatically on every push and pull request to `main` via `.github/workflows/ci.yml`, executing all quality gates and updating the coverage badge.
 

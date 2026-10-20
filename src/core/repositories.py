@@ -11,7 +11,7 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from src.config import DEFAULT_ETF_CACHE_TTL_DAYS, ETF_CACHE_FILE
+from src.config import DATA_DIR, DEFAULT_ETF_CACHE_TTL_DAYS, ETF_CACHE_FILE
 from src.core.exceptions import StorageReadError, StorageWriteError
 from src.core.models import (
     Asset,
@@ -260,7 +260,7 @@ class SqliteHistoryRepository:
 class ParquetHistoryRepository:
     """Parquet file-backed implementation of HistoryRepository using PyArrow."""
 
-    def __init__(self, file_path: str | Path = "data/history.parquet") -> None:
+    def __init__(self, file_path: str | Path = DATA_DIR / "history.parquet") -> None:
         self.file_path: Path = Path(file_path)
 
     def load_history(self) -> list[PortfolioSnapshot]:
