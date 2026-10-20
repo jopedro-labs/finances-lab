@@ -169,8 +169,7 @@ def test_exposure_engine_missing_etf_and_stock_details() -> None:
     sectors, countries = engine.calculate_consolidated_exposure(snapshot)
 
     assert sectors.get("Unknown") == 100.0
-    assert countries.get("Unknown") == 50.0
-    assert countries.get("United States") == 50.0
+    assert countries.get("Unknown") == 100.0
 
 
 def test_exposure_engine_skips_zero_value_assets() -> None:

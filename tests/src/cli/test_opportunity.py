@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
 from src.cli.opportunity import (
@@ -24,6 +23,7 @@ from src.core.exceptions import (
     GeminiQuotaError,
 )
 from src.core.models import (
+    Asset,
     CountryExposure,
     ETFDetails,
     Holding,
@@ -83,15 +83,6 @@ def test_calculate_current_allocations_skips_invalid_items() -> None:
     assert allocations == {}
 
 
-def test_enrich_target_asset_missing_symbol_raises_value_error() -> None:
-    """Validates enrich_target_asset raises ValueError when symbol missing."""
-    mock_stock: MagicMock = MagicMock()
-    mock_etf: MagicMock = MagicMock()
-
-    with pytest.raises(ValueError, match="Missing symbol or type"):
-        enrich_target_asset({}, 0.0, mock_stock, mock_etf)
-
-
 def test_enrich_target_asset_stock() -> None:
     """Validates target enrichment for STOCK assets fetching live details."""
     mock_stock_provider: MagicMock = MagicMock()
@@ -105,14 +96,18 @@ def test_enrich_target_asset_stock() -> None:
         forward_pe=20.0,
     )
 
-    target: dict[str, Any] = {
-        "yahoo_ticker": "AAPL",
-        "asset_type": "STOCK",
-        "target_allocation_pct": 15.0,
-    }
+    asset: Asset = Asset(
+        name="Apple Inc.",
+        isin="US0378331005",
+        yahoo_ticker="AAPL",
+        quantity=0.0,
+        average_buy_price=0.0,
+        asset_type="STOCK",
+    )
 
     enriched: dict[str, Any] = enrich_target_asset(
-        target=target,
+        asset=asset,
+        target_alloc_pct=15.0,
         current_alloc_pct=10.0,
         stock_provider=mock_stock_provider,
         etf_provider=mock_etf_provider,
@@ -135,14 +130,18 @@ def test_enrich_target_asset_price_zero_fallback() -> None:
     mock_stock_provider.get_price.return_value = Quotation(price=0.0, currency="EUR")
     mock_stock_provider.get_details.return_value = None
 
-    target: dict[str, Any] = {
-        "yahoo_ticker": "UNKNOWN",
-        "asset_type": "STOCK",
-        "target_allocation_pct": 5.0,
-    }
+    asset: Asset = Asset(
+        name="Unknown",
+        isin="",
+        yahoo_ticker="UNKNOWN",
+        quantity=0.0,
+        average_buy_price=0.0,
+        asset_type="STOCK",
+    )
 
     enriched: dict[str, Any] = enrich_target_asset(
-        target=target,
+        asset=asset,
+        target_alloc_pct=5.0,
         current_alloc_pct=0.0,
         stock_provider=mock_stock_provider,
         etf_provider=mock_etf_provider,
@@ -150,7 +149,7 @@ def test_enrich_target_asset_price_zero_fallback() -> None:
 
     assert enriched["current_price"] == 0.0
     assert enriched["peak_price"] == 0.01
-    assert enriched["country"] == "United States"
+    assert enriched["country"] is None
 
 
 def test_enrich_target_asset_etf() -> None:
@@ -166,15 +165,21 @@ def test_enrich_target_asset_etf() -> None:
         country_breakdown=[CountryExposure(country_name="US", weight_pct=100.0)],
         ter_pct=0.20,
     )
+    mock_etf_provider.get_market_data.return_value = None
 
-    target: dict[str, Any] = {
-        "yahoo_ticker": "EUNL.DE",
-        "asset_type": "ETF",
-        "target_allocation_pct": 20.0,
-    }
+    asset: Asset = Asset(
+        name="Core MSCI World",
+        isin="IE00B4L5Y983",
+        yahoo_ticker="EUNL.DE",
+        quantity=0.0,
+        average_buy_price=0.0,
+        asset_type="ETF",
+        xtb_ticker="EUNL.DE",
+    )
 
     enriched: dict[str, Any] = enrich_target_asset(
-        target=target,
+        asset=asset,
+        target_alloc_pct=20.0,
         current_alloc_pct=5.0,
         stock_provider=mock_stock_provider,
         etf_provider=mock_etf_provider,
@@ -186,6 +191,8 @@ def test_enrich_target_asset_etf() -> None:
     assert len(enriched["sector_breakdown"]) == 1
     assert len(enriched["country_breakdown"]) == 1
     assert len(enriched["top_holdings"]) == 1
+    # StockProvider.get_details must NOT be called for ETF assets
+    mock_stock_provider.get_details.assert_not_called()
 
 
 def test_format_action_and_urgency() -> None:
@@ -539,10 +546,8 @@ def test_rebalance_command_partial_enrichment_and_db_save(
 
     mock_calc.return_value = ({}, 150.0)
 
-    def side_effect_enrich(
-        target: dict[str, Any], *args: Any, **kwargs: Any
-    ) -> dict[str, Any]:
-        sym: str = target.get("yahoo_ticker", "")
+    def side_effect_enrich(asset: Asset, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        sym: str = asset.yahoo_ticker
         if sym == "FAIL":
             raise ValueError("Enrichment error")
         return {

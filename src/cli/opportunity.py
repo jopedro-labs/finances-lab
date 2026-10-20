@@ -16,6 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from src.config import DATA_DIR, OUTPUT_DIR, settings
+from src.core.currency_exchange import get_exchange_rate
 from src.core.exceptions import (
     GeminiAPIError,
     GeminiAuthError,
@@ -24,6 +25,7 @@ from src.core.exceptions import (
 from src.core.models import (
     Asset,
     ETFDetails,
+    ETFMarketData,
     PortfolioSnapshot,
     Quotation,
     RebalanceRecommendation,
@@ -102,99 +104,101 @@ def calculate_current_allocations(
 
 
 def enrich_target_asset(
-    target: dict[str, Any],
+    asset: Asset,
+    target_alloc_pct: float,
     current_alloc_pct: float,
     stock_provider: StockProvider,
     etf_provider: ETFProvider,
+    db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Enriches wishlist asset with real-time market data, TER, and breakdowns."""
-    symbol: str = str(target.get("yahoo_ticker") or target.get("symbol") or "").strip()
-    asset_type: str = str(target.get("asset_type") or target.get("type") or "").upper()
-    isin: str = str(target.get("isin", ""))
+    """Enriches a portfolio asset with real-time market data and fund metadata."""
+    asset_type: str = asset.asset_type.upper()
 
-    if not symbol or not asset_type:
-        raise ValueError(f"Missing symbol or type for target asset: {target}")
-
-    dummy_asset: Asset = Asset(
-        name=symbol,
-        isin=isin,
-        yahoo_ticker=symbol,
-        quantity=0.0,
-        average_buy_price=0.0,
-        asset_type=asset_type,
-    )
-
-    quote: Quotation | None = stock_provider.get_price(dummy_asset)
+    quote: Quotation | None = stock_provider.get_price(asset)
     current_price: float = quote.price if quote else 0.0
 
     if current_price <= 0.0:
-        logger.warning(f"Live market price unavailable for target '{symbol}'.")
+        logger.warning(
+            f"Live market price unavailable for target '{asset.yahoo_ticker}'."
+        )
 
-    stock_details: StockDetails | None = stock_provider.get_details(dummy_asset)
+    # For ETFs, yfinance stock details (52w range, moving averages) come from
+    # ETFMarketData fetched below — skip the redundant StockProvider call.
+    stock_details: StockDetails | None = (
+        stock_provider.get_details(asset, db_path=db_path)
+        if asset_type != "ETF"
+        else None
+    )
 
     peak_price: float = (
         stock_details.fifty_two_week_high
         if stock_details and stock_details.fifty_two_week_high
         else current_price
     )
+    low_52w: float | None = stock_details.fifty_two_week_low if stock_details else None
+
+    # yfinance returns 52w high/low in the ticker's native currency (e.g. DKK for
+    # NOVO-B.CO) but current_price has already been FX-converted to EUR by
+    # get_price(). Apply the same conversion so all three values share the same unit.
+    if (
+        stock_details
+        and quote
+        and quote.native_currency
+        and quote.native_currency != "EUR"
+    ):
+        fx_rate: float | None = get_exchange_rate(quote.native_currency, "EUR")
+        if fx_rate:
+            if peak_price and peak_price != current_price:
+                peak_price = peak_price * fx_rate
+            if low_52w is not None:
+                low_52w = low_52w * fx_rate
+
     if peak_price <= 0.0:
         peak_price = max(current_price, 0.01)
 
-    low_52w: float | None = stock_details.fifty_two_week_low if stock_details else None
+    country_val: str | None = stock_details.country if stock_details else None
 
-    ter: float | None = None
-    sector_breakdown: list[dict[str, Any]] = []
-    country_breakdown: list[dict[str, Any]] = []
-    top_holdings: list[dict[str, Any]] = []
-
-    if asset_type == "ETF":
-        etf_details: ETFDetails | None = etf_provider.get_details(dummy_asset)
-        if etf_details:
-            ter = etf_details.ter_pct
-            sector_breakdown = [s.to_dict() for s in etf_details.sector_breakdown]
-            country_breakdown = [c.to_dict() for c in etf_details.country_breakdown]
-            top_holdings = [h.to_dict() for h in etf_details.holdings]
-
-    target_alloc_pct: float = float(target.get("target_allocation_pct", 0.0))
     alloc_gap_pct: float = round(target_alloc_pct - current_alloc_pct, 2)
 
-    country_val: str | None = (
-        getattr(stock_details, "country", None)
-        if stock_details
-        else target.get("country")
-    )
-    if not country_val and asset_type == "STOCK":
-        country_val = "United States"
-
-    price_to_book_val: float | None = (
-        stock_details.price_to_book if stock_details else None
-    )
-    if price_to_book_val is not None and price_to_book_val <= 0:
-        price_to_book_val = None
-
-    return {
-        "symbol": symbol,
-        "isin": isin,
+    enriched: dict[str, Any] = {
+        "symbol": asset.yahoo_ticker,
+        "xtb_ticker": asset.xtb_ticker,
+        "isin": asset.isin,
         "asset_type": asset_type,
+        "currency": stock_details.currency if stock_details else None,
         "current_price": current_price,
         "peak_price": peak_price,
         "low_52w": low_52w,
         "high_52w": peak_price,
+        "fifty_two_week_change_pct": (
+            stock_details.fifty_two_week_change_pct if stock_details else None
+        ),
+        "fifty_day_average": stock_details.fifty_day_average if stock_details else None,
+        "two_hundred_day_average": (
+            stock_details.two_hundred_day_average if stock_details else None
+        ),
+        "average_volume": stock_details.average_volume if stock_details else None,
         "target_allocation_pct": target_alloc_pct,
         "current_allocation_pct": current_alloc_pct,
         "allocation_gap_pct": alloc_gap_pct,
-        "sector": stock_details.sector if stock_details else target.get("sector"),
-        "country": country_val,
+        "sector": stock_details.sector if stock_details else None,
         "industry": stock_details.industry if stock_details else None,
+        "country": country_val,
         "market_cap": stock_details.market_cap if stock_details else None,
         "trailing_pe": stock_details.pe_ratio if stock_details else None,
         "forward_pe": stock_details.forward_pe if stock_details else None,
         "peg_ratio": stock_details.peg_ratio if stock_details else None,
-        "price_to_book": price_to_book_val,
+        "price_to_book": stock_details.price_to_book if stock_details else None,
+        "eps_trailing_ttm": stock_details.eps_trailing_ttm if stock_details else None,
+        "eps_forward": stock_details.eps_forward if stock_details else None,
         "dividend_yield_pct": (
             stock_details.dividend_yield_pct if stock_details else None
         ),
         "beta": stock_details.beta if stock_details else None,
+        "gross_margins_pct": stock_details.gross_margins_pct if stock_details else None,
+        "operating_margins_pct": (
+            stock_details.operating_margins_pct if stock_details else None
+        ),
         "profit_margins_pct": (
             stock_details.profit_margins_pct if stock_details else None
         ),
@@ -204,20 +208,82 @@ def enrich_target_asset(
         "earnings_growth_pct": (
             stock_details.earnings_growth_pct if stock_details else None
         ),
+        "return_on_equity_pct": (
+            stock_details.return_on_equity_pct if stock_details else None
+        ),
+        "return_on_assets_pct": (
+            stock_details.return_on_assets_pct if stock_details else None
+        ),
         "total_debt_to_equity": (
             stock_details.total_debt_to_equity if stock_details else None
         ),
-        "target_mean_price": (
-            stock_details.target_mean_price if stock_details else None
+        "free_cashflow": stock_details.free_cashflow if stock_details else None,
+        "short_ratio": stock_details.short_ratio if stock_details else None,
+        "target_mean_price": stock_details.target_mean_price if stock_details else None,
+        "target_high_price": stock_details.target_high_price if stock_details else None,
+        "target_low_price": stock_details.target_low_price if stock_details else None,
+        "number_of_analyst_opinions": (
+            stock_details.number_of_analyst_opinions if stock_details else None
         ),
         "recommendation_key": (
             stock_details.recommendation_key if stock_details else None
         ),
-        "ter": ter,
-        "sector_breakdown": sector_breakdown,
-        "country_breakdown": country_breakdown,
-        "top_holdings": top_holdings,
+        # ETF-specific fields — populated below for ETF assets
+        "ter": None,
+        "nav_price": None,
+        "nav_currency": None,
+        "fund_size_eur_m": None,
+        "holdings_count": None,
+        "replication": None,
+        "distribution_policy": None,
+        "index_name": None,
+        "fund_currency": None,
+        "inception_date": None,
+        "volatility_1y_pct": None,
+        "sector_breakdown": [],
+        "country_breakdown": [],
+        "top_holdings": [],
     }
+
+    if asset_type == "ETF":
+        etf_details: ETFDetails | None = etf_provider.get_details(
+            asset, db_path=db_path
+        )
+        if etf_details:
+            enriched["ter"] = etf_details.ter_pct
+            enriched["fund_size_eur_m"] = etf_details.fund_size_eur_m
+            enriched["holdings_count"] = etf_details.holdings_count
+            enriched["replication"] = etf_details.replication
+            enriched["distribution_policy"] = etf_details.distribution_policy
+            enriched["index_name"] = etf_details.index_name
+            enriched["fund_currency"] = etf_details.fund_currency
+            enriched["inception_date"] = etf_details.inception_date
+            enriched["volatility_1y_pct"] = etf_details.volatility_1y_pct
+            enriched["sector_breakdown"] = [
+                s.to_dict() for s in etf_details.sector_breakdown
+            ]
+            enriched["country_breakdown"] = [
+                c.to_dict() for c in etf_details.country_breakdown
+            ]
+            enriched["top_holdings"] = [h.to_dict() for h in etf_details.holdings]
+
+        etf_mkt: ETFMarketData | None = etf_provider.get_market_data(asset)
+        if etf_mkt:
+            enriched["nav_price"] = etf_mkt.nav_price
+            enriched["nav_currency"] = (
+                etf_details.fund_currency if etf_details else etf_mkt.currency
+            )
+            enriched["fifty_two_week_change_pct"] = etf_mkt.fifty_two_week_change_pct
+            enriched["fifty_day_average"] = etf_mkt.fifty_day_average
+            enriched["two_hundred_day_average"] = etf_mkt.two_hundred_day_average
+            enriched["average_volume"] = etf_mkt.average_volume
+            if etf_mkt.fifty_two_week_high:
+                enriched["peak_price"] = etf_mkt.fifty_two_week_high
+                enriched["high_52w"] = etf_mkt.fifty_two_week_high
+            if etf_mkt.fifty_two_week_low:
+                enriched["low_52w"] = etf_mkt.fifty_two_week_low
+
+    return enriched
 
 
 def export_outputs(
@@ -876,9 +942,16 @@ def recommend_rebalance(
                 target.get("yahoo_ticker") or target.get("symbol") or ""
             ).strip()
             alloc_pct: float = current_alloc_map.get(symbol, 0.0)
+            target_pct: float = float(target.get("target_allocation_pct", 0.0))
             try:
+                asset: Asset = Asset.from_dict(target)
                 enriched: dict[str, Any] = enrich_target_asset(
-                    target, alloc_pct, stock_provider, etf_provider
+                    asset,
+                    target_pct,
+                    alloc_pct,
+                    stock_provider,
+                    etf_provider,
+                    db_path=db_path,
                 )
                 historical_trend: list[dict[str, Any]] = (
                     opportunity_repo.load_asset_history(symbol, limit=3)

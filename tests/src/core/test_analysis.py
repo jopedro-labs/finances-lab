@@ -247,7 +247,7 @@ def test_calculate_portfolio_exposure_comprehensive() -> None:
 
 
 def test_calculate_portfolio_exposure_stock_sector_fallback() -> None:
-    """Tests stock exposure uses provider sector and defaults country to US."""
+    """Tests stock exposure uses provider sector and country fields."""
     mock_p_repo: MagicMock = MagicMock()
     mock_p_repo.load_assets.return_value = [
         Asset(
@@ -261,7 +261,9 @@ def test_calculate_portfolio_exposure_stock_sector_fallback() -> None:
     ]
 
     mock_stock_prov: MagicMock = MagicMock()
-    mock_stock_prov.get_details.return_value = MagicMock(sector="Technology")
+    mock_stock_prov.get_details.return_value = StockDetails(
+        sector="Technology", country="United States"
+    )
 
     snapshot: PortfolioSnapshot = PortfolioSnapshot(
         timestamp="2026-08-22",

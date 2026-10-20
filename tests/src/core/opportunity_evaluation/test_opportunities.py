@@ -114,27 +114,28 @@ def test_etf_allocation_score_all_branches() -> None:
         == 0.0
     )
 
-    # Underweight gap within bounds (gap = 5%, target = 10% -> 0.5)
-    assert (
-        strategy.calculate_allocation_score(
-            target_allocation_pct=10.0, current_allocation_pct=5.0
-        )
-        == 0.5
-    )
+    # Absolute gap: 5% gap / 15% normalizer = 0.333 (not relative to target)
+    assert strategy.calculate_allocation_score(
+        target_allocation_pct=10.0, current_allocation_pct=5.0
+    ) == pytest.approx(5.0 / 15.0, abs=1e-4)
 
-    # Relative gap example: Target 2%, Current 0% -> 1.0 (all missing)
-    assert (
-        strategy.calculate_allocation_score(
-            target_allocation_pct=2.0, current_allocation_pct=0.0
-        )
-        == 1.0
-    )
+    # Small target: 2% gap / 15% normalizer = 0.133 (not capped at 1.0)
+    assert strategy.calculate_allocation_score(
+        target_allocation_pct=2.0, current_allocation_pct=0.0
+    ) == pytest.approx(2.0 / 15.0, abs=1e-4)
 
 
 def test_etf_calculate_score_composite() -> None:
     """Validates composite ETF scoring with rounding
     and weighted sums."""
-    strategy: EtfScoringStrategy = EtfScoringStrategy()
+    # Use explicit config so the test is independent of .env overrides
+    config: EtfStrategyConfig = EtfStrategyConfig(
+        weight_dip=0.35,
+        weight_ter=0.20,
+        weight_allocation=0.45,
+        alloc_gap_normalizer_pct=15.0,
+    )
+    strategy: EtfScoringStrategy = EtfScoringStrategy(config=config)
 
     score: AssetScore = strategy.calculate_score(
         symbol="EUNL.DE",
@@ -149,8 +150,10 @@ def test_etf_calculate_score_composite() -> None:
     assert score.asset_type == AssetType.ETF
     assert score.dip_score == 1.0
     assert score.cost_score == 1.0
-    assert score.allocation_score == 1.0
-    assert score.total_score == 1.0
+    # 10% gap / 15% normalizer = 0.6667 (absolute magnitude, not relative to target)
+    assert score.allocation_score == pytest.approx(10.0 / 15.0, abs=1e-4)
+    # 1.0*0.35 + 1.0*0.20 + 0.6667*0.45 = 0.85
+    assert score.total_score == pytest.approx(0.85, abs=1e-4)
 
 
 # ==============================================================================

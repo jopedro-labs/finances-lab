@@ -113,14 +113,19 @@ class Settings(BaseSettings):
     stock_52w_bottom_band: float = Field(default=0.30, alias="STOCK_52W_BOTTOM_BAND")
 
     # ETF Strategy Settings
-    etf_weight_dip: float = Field(default=0.60, alias="ETF_WEIGHT_DIP")
+    etf_weight_dip: float = Field(default=0.35, alias="ETF_WEIGHT_DIP")
     etf_weight_ter: float = Field(default=0.20, alias="ETF_WEIGHT_TER")
-    etf_weight_allocation: float = Field(default=0.20, alias="ETF_WEIGHT_ALLOCATION")
+    etf_weight_allocation: float = Field(default=0.45, alias="ETF_WEIGHT_ALLOCATION")
     etf_dip_min_pct: float = Field(default=5.0, alias="ETF_DIP_MIN_PCT")
     etf_dip_max_pct: float = Field(default=10.0, alias="ETF_DIP_MAX_PCT")
     etf_ter_low_pct: float = Field(default=0.10, alias="ETF_TER_LOW_PCT")
     etf_ter_high_pct: float = Field(default=0.50, alias="ETF_TER_HIGH_PCT")
     etf_alloc_gap_max_pct: float = Field(default=10.0, alias="ETF_ALLOC_GAP_MAX_PCT")
+    # Normalizer for ETF allocation score: gap above this value → score 1.0.
+    # Ensures a 28% target outscores a 5% target even in a cold-start portfolio.
+    etf_alloc_gap_normalizer_pct: float = Field(
+        default=15.0, alias="ETF_ALLOC_GAP_NORMALIZER_PCT"
+    )
 
     # Exposure Penalty Settings
     exposure_sector_penalty_weight: float = Field(
@@ -275,6 +280,9 @@ class EtfStrategyConfig:
     ter_high_pct: float = field(default_factory=lambda: get_settings().etf_ter_high_pct)
     alloc_gap_max_pct: float = field(
         default_factory=lambda: get_settings().etf_alloc_gap_max_pct
+    )
+    alloc_gap_normalizer_pct: float = field(
+        default_factory=lambda: get_settings().etf_alloc_gap_normalizer_pct
     )
 
     def __post_init__(self) -> None:

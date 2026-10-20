@@ -94,8 +94,19 @@ def get_snapshot(
         if not quotation:
             continue
 
-        native_price: float = quotation.price
-        native_currency: str = quotation.currency.upper()
+        # Use the pre-conversion price/currency when available (non-EUR assets),
+        # so AssetSnapshot.native_price/native_currency reflect the real market
+        # price (e.g. 261.2 DKK for NOVO-B.CO, not the EUR-converted 34.91).
+        native_price: float = (
+            quotation.native_price
+            if quotation.native_price is not None
+            else quotation.price
+        )
+        native_currency: str = (
+            quotation.native_currency
+            if quotation.native_currency is not None
+            else quotation.currency
+        )
         value_native: float = native_price * asset.quantity
 
         if native_currency not in exchange_rates_cache:

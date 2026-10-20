@@ -71,12 +71,21 @@ class JustETFClient:
             sectors: list[SectorExposure] = self._parse_sectors(soup)
             countries: list[CountryExposure] = self._parse_countries(soup)
             ter_pct: float | None = self._parse_ter(soup)
+            fund_meta: dict[str, Any] = self._parse_fund_metadata(soup)
 
             return ETFDetails(
                 holdings=holdings,
                 sector_breakdown=sectors,
                 country_breakdown=countries,
                 ter_pct=ter_pct,
+                inception_date=fund_meta.get("inception_date"),
+                fund_size_eur_m=fund_meta.get("fund_size_eur_m"),
+                holdings_count=fund_meta.get("holdings_count"),
+                replication=fund_meta.get("replication"),
+                distribution_policy=fund_meta.get("distribution_policy"),
+                index_name=fund_meta.get("index_name"),
+                fund_currency=fund_meta.get("fund_currency"),
+                volatility_1y_pct=fund_meta.get("volatility_1y_pct"),
             )
         except Exception as e:
             if isinstance(e, JustETFScrapeError):
@@ -84,6 +93,55 @@ class JustETFClient:
             raise JustETFScrapeError(
                 f"Failed to parse JustETF response for ISIN {isin}: {e}"
             ) from e
+
+    def _parse_fund_metadata(self, soup: BeautifulSoup) -> dict[str, Any]:
+        """Extracts fund-level metadata from the JustETF key facts section."""
+        meta: dict[str, Any] = {}
+        text: str = soup.get_text(separator="\n", strip=True)
+
+        patterns: dict[str, str] = {
+            "inception_date": r"Inception(?:/\s*Listing)?\s*Date\s*\n([^\n]+)",
+            "replication": r"Replication\s*\n([^\n]+)",
+            "distribution_policy": r"Distribution policy\s*\n([^\n]+)",
+            "index_name": r"Index\s*\n([^\n]+)",
+            "fund_currency": r"Fund currency\s*\n([^\n]+)",
+        }
+        for key, pattern in patterns.items():
+            m: re.Match[str] | None = re.search(pattern, text)
+            if m:
+                meta[key] = m.group(1).strip()
+
+        # Fund size: "Fund size EUR 131,267 m" or "Fund size\nEUR 131,267 m"
+        fs_match: re.Match[str] | None = re.search(
+            r"Fund size\s*\n?EUR\s*([\d,]+)\s*m", text
+        )
+        if fs_match:
+            try:
+                meta["fund_size_eur_m"] = float(fs_match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+
+        # Holdings count: "Holdings\n1,252" or "out of 1,252"
+        hc_match: re.Match[str] | None = re.search(r"Holdings\s*\n([\d,]+)", text)
+        if not hc_match:
+            hc_match = re.search(r"out of ([\d,]+)", text)
+        if hc_match:
+            try:
+                meta["holdings_count"] = int(hc_match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+
+        # Volatility 1Y: "Volatility 1 year (in EUR) 10.60%"
+        vol_match: re.Match[str] | None = re.search(
+            r"Volatility 1 year[^\n]*\n?([\d.,]+)\s*%", text
+        )
+        if vol_match:
+            try:
+                meta["volatility_1y_pct"] = float(vol_match.group(1).replace(",", "."))
+            except ValueError:
+                pass
+
+        return meta
 
     def _extract_isin_from_element(self, element: Tag) -> str:
         if not element:

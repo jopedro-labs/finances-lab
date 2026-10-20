@@ -76,6 +76,19 @@ CREATE TABLE IF NOT EXISTS etf_fundamental_history (
 );
 """
 
+CREATE_ASSET_FUNDAMENTALS_TABLE_SQL: str = """
+CREATE TABLE IF NOT EXISTS asset_fundamentals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER NOT NULL UNIQUE,
+    asset_type TEXT NOT NULL CHECK (UPPER(asset_type) IN ('STOCK', 'ETF')),
+    fetched_at TEXT NOT NULL,
+    details_json TEXT NOT NULL,
+    quality_tier TEXT,
+    quality_score INTEGER,
+    FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE
+);
+"""
+
 CREATE_OPPORTUNITIES_TABLE_SQL: str = """
 CREATE TABLE IF NOT EXISTS opportunities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,6 +137,7 @@ def initialize_database(conn: sqlite3.Connection) -> None:
     cursor.execute(CREATE_ETF_FUNDAMENTALS_TABLE_SQL)
     cursor.execute(CREATE_OPPORTUNITIES_TABLE_SQL)
     cursor.execute(CREATE_OPPORTUNITY_ASSET_METRICS_TABLE_SQL)
+    cursor.execute(CREATE_ASSET_FUNDAMENTALS_TABLE_SQL)
 
     try:
         cursor.execute(

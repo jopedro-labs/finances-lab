@@ -112,10 +112,10 @@ def test_etf_ter_score_boundaries() -> None:
 
 
 def test_etf_allocation_score() -> None:
-    """Tests underweight allocation gap priority calculation using relative gap."""
+    """Tests allocation gap priority using absolute gap magnitude (normalizer=15%)."""
     strategy: EtfScoringStrategy = EtfScoringStrategy()
 
-    # Overweight or on target
+    # Overweight or on target → 0
     assert (
         strategy.calculate_allocation_score(
             target_allocation_pct=20.0, current_allocation_pct=25.0
@@ -123,18 +123,23 @@ def test_etf_allocation_score() -> None:
         == 0.0
     )
 
-    # Partial gap (10% missing of 30% target = 1/3)
+    # Partial gap: 10% absolute gap / 15% normalizer = 0.6667
     assert strategy.calculate_allocation_score(
         target_allocation_pct=30.0, current_allocation_pct=20.0
-    ) == pytest.approx(0.3333, abs=1e-4)
+    ) == pytest.approx(10.0 / 15.0, abs=1e-4)
 
-    # Full gap (100% missing)
+    # Large gap above normalizer → capped at 1.0
     assert (
         strategy.calculate_allocation_score(
-            target_allocation_pct=10.0, current_allocation_pct=0.0
+            target_allocation_pct=28.0, current_allocation_pct=0.0
         )
         == 1.0
     )
+
+    # Small gap: 5% / 15% = 0.3333 — lower than a 10% gap
+    assert strategy.calculate_allocation_score(
+        target_allocation_pct=5.0, current_allocation_pct=0.0
+    ) == pytest.approx(5.0 / 15.0, abs=1e-4)
 
 
 def test_engine_ranks_assets_correctly() -> None:

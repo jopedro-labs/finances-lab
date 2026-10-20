@@ -210,7 +210,7 @@ def test_stock_provider_get_details_success(
         average_buy_price=120.0,
     )
 
-    details: StockDetails | None = provider.get_details(asset)
+    details: StockDetails | None = provider.get_details(asset, force_refresh=True)
 
     assert details is not None
     assert details.market_cap == 3000000000000.0
@@ -244,7 +244,7 @@ def test_stock_provider_get_details_dividend_rate_calculation(
         average_buy_price=120.0,
     )
 
-    details: StockDetails | None = provider.get_details(asset)
+    details: StockDetails | None = provider.get_details(asset, force_refresh=True)
 
     assert details is not None
     assert details.dividend_yield_pct == 2.0
@@ -282,7 +282,7 @@ def test_stock_provider_get_details_empty_or_invalid_info(
         average_buy_price=120.0,
     )
 
-    assert provider.get_details(asset) is None
+    assert provider.get_details(asset, force_refresh=True) is None
 
 
 @patch("src.core.providers.yf.Ticker")
@@ -306,7 +306,7 @@ def test_stock_provider_get_details_invalid_float_conversion(
         average_buy_price=120.0,
     )
 
-    details: StockDetails | None = provider.get_details(asset)
+    details: StockDetails | None = provider.get_details(asset, force_refresh=True)
 
     assert details is not None
     assert details.market_cap is None
@@ -329,7 +329,7 @@ def test_stock_provider_get_details_handles_exception(
         average_buy_price=120.0,
     )
 
-    assert provider.get_details(asset) is None
+    assert provider.get_details(asset, force_refresh=True) is None
 
 
 # ==============================================================================
@@ -387,7 +387,9 @@ def test_etf_provider_uses_cache_hit(mock_get_price: MagicMock) -> None:
     )
 
     quote: Quotation | None = provider.get_price(asset)
-    details: ETFDetails | None = provider.get_details(asset)
+    details: ETFDetails | None = provider.get_details(
+        asset, db_path="/nonexistent/test.db"
+    )
 
     assert quote is not None
     assert quote.price == 100.0
@@ -423,7 +425,9 @@ def test_etf_provider_cache_miss_fetches_and_saves() -> None:
         average_buy_price=80.0,
     )
 
-    details: ETFDetails | None = provider.get_details(asset)
+    details: ETFDetails | None = provider.get_details(
+        asset, db_path="/nonexistent/test.db"
+    )
 
     assert details == sample_details
     mock_client.get_etf_details.assert_called_once_with("IE00B4L5Y983")
@@ -466,8 +470,8 @@ def test_etf_provider_get_details_scraper_exception() -> None:
     assert provider.get_details(asset) is None
 
 
-def test_etf_provider_get_details_scraper_exception_with_fallback() -> None:
-    """Validates benchmark fallback is applied when scraper fails for benchmark ETF."""
+def test_etf_provider_get_details_scraper_exception_returns_none() -> None:
+    """Validates that None is returned when the JustETF scraper fails."""
     mock_cache: MagicMock = MagicMock()
     mock_cache.get_etf_details.return_value = None
 
@@ -485,11 +489,9 @@ def test_etf_provider_get_details_scraper_exception_with_fallback() -> None:
         average_buy_price=80.0,
     )
 
-    details: ETFDetails | None = provider.get_details(asset)
+    details: ETFDetails | None = provider.get_details(asset, force_refresh=True)
 
-    assert details is not None
-    assert len(details.country_breakdown) > 0
-    assert len(details.sector_breakdown) > 0
+    assert details is None
 
 
 @patch("src.core.providers.JustETFClient")
