@@ -139,9 +139,9 @@ def save_quality_to_database(
                         """
                         INSERT INTO assets (
                             isin, name, yahoo_ticker,
-                            quantity, average_buy_price, asset_type
+                            quantity, average_buy_price, asset_type, is_active
                         )
-                        VALUES (?, ?, ?, 0.0, 0.0, ?)
+                        VALUES (?, ?, ?, 0.0, 0.0, ?, 0)
                         """,
                         (isin_str, name_str, symbol_str, asset_type_str),
                     )

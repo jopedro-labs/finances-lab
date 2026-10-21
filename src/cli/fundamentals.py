@@ -32,7 +32,7 @@ def sync_stock_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             cursor.execute(
                 "SELECT id, isin, name, yahoo_ticker, quantity, "
                 "average_buy_price, asset_type FROM assets "
-                "WHERE UPPER(asset_type) = 'STOCK'"
+                "WHERE UPPER(asset_type) = 'STOCK' AND is_active = 1"
             )
             rows: list[Any] = cursor.fetchall()
             stocks = [
@@ -124,7 +124,7 @@ def sync_etf_fundamentals(db_path: str | Path = DEFAULT_DB_PATH) -> None:
             cursor.execute(
                 "SELECT id, isin, name, yahoo_ticker, quantity, "
                 "average_buy_price, asset_type FROM assets "
-                "WHERE UPPER(asset_type) = 'ETF'"
+                "WHERE UPPER(asset_type) = 'ETF' AND is_active = 1"
             )
             rows: list[Any] = cursor.fetchall()
             etfs = [

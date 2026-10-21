@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import csv
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -48,13 +48,79 @@ app: typer.Typer = typer.Typer(
 console: Console = Console()
 
 
+def _validate_snapshot(
+    snapshot: PortfolioSnapshot | None,
+    portfolio_tickers: set[str],
+    freshness_hours: int,
+) -> PortfolioSnapshot | None:
+    """Returns snapshot if fresh and composition matches; otherwise None."""
+    if snapshot is None:
+        logger.warning(
+            "No portfolio snapshot found in the database. "
+            "Falling back to live API prices for opportunity scoring."
+        )
+        return None
+
+    try:
+        ts_str = snapshot.timestamp.replace("Z", "+00:00")
+        ts = datetime.fromisoformat(ts_str)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+    except ValueError:
+        logger.warning(
+            f"Snapshot timestamp '{snapshot.timestamp}' could not be parsed. "
+            "Falling back to live API prices."
+        )
+        return None
+
+    age_hours = (datetime.now(tz=UTC) - ts).total_seconds() / 3600.0
+    if age_hours > freshness_hours:
+        logger.warning(
+            f"Latest snapshot is {age_hours:.1f}h old "
+            f"(threshold: {freshness_hours}h). "
+            "Falling back to live API prices for opportunity scoring."
+        )
+        return None
+
+    snapshot_tickers: set[str] = {a.yahoo_ticker for a in snapshot.assets_snapshot}
+    if portfolio_tickers != snapshot_tickers:
+        diff = portfolio_tickers ^ snapshot_tickers
+        logger.warning(
+            f"Portfolio composition discrepancy detected "
+            f"({', '.join(sorted(diff))}). "
+            "Falling back to live API prices."
+        )
+        return None
+
+    return snapshot
+
+
 def calculate_current_allocations(
     portfolio_items: list[dict[str, Any]],
     stock_provider: StockProvider,
+    snapshot: PortfolioSnapshot | None = None,
 ) -> tuple[dict[str, float], float]:
-    """Fetches live prices for active holdings and computes real allocation %."""
-    holdings_value_map: dict[str, float] = {}
-    total_portfolio_value: float = 0.0
+    """Fetches live prices for active holdings and computes real allocation %.
+
+    When `snapshot` is provided its asset values are used directly, avoiding
+    a second round of API calls and guaranteeing that the total value used by
+    the opportunity engine matches the snapshot already persisted to the DB.
+    """
+    if snapshot is not None:
+        holdings_value_map: dict[str, float] = {
+            a.yahoo_ticker: a.value_eur for a in snapshot.assets_snapshot
+        }
+        total_portfolio_value: float = snapshot.total_value_eur
+        if total_portfolio_value <= 0.0:
+            return {}, 0.0
+        allocation_pct_map: dict[str, float] = {
+            symbol: (val / total_portfolio_value) * 100.0
+            for symbol, val in holdings_value_map.items()
+        }
+        return allocation_pct_map, total_portfolio_value
+
+    holdings_value_map = {}
+    total_portfolio_value = 0.0
 
     for item in portfolio_items:
         symbol: str = str(item.get("yahoo_ticker") or item.get("symbol") or "").strip()
@@ -95,7 +161,7 @@ def calculate_current_allocations(
     if total_portfolio_value <= 0.0:
         return {}, 0.0
 
-    allocation_pct_map: dict[str, float] = {
+    allocation_pct_map = {
         symbol: (val / total_portfolio_value) * 100.0
         for symbol, val in holdings_value_map.items()
     }
@@ -909,6 +975,27 @@ def recommend_rebalance(
     ] = False,
 ) -> None:
     """Ranks targets and provides AI-driven rebalancing recommendations."""
+    _run_rebalance(
+        targets_file=targets_file,
+        portfolio_file=portfolio_file,
+        db_path=db_path,
+        skip_ai=skip_ai,
+        verbose=verbose,
+        notify=notify,
+        injected_snapshot=None,
+    )
+
+
+def _run_rebalance(
+    targets_file: Path,
+    portfolio_file: Path,
+    db_path: Path,
+    skip_ai: bool,
+    verbose: bool,
+    notify: bool,
+    injected_snapshot: PortfolioSnapshot | None = None,
+) -> None:
+    """Core rebalance logic — called by the CLI command and the 'update' command."""
     targets_raw: list[dict[str, Any]] = load_json_data(targets_file)
     portfolio_raw: list[dict[str, Any]] = load_json_data(portfolio_file)
 
@@ -931,11 +1018,25 @@ def recommend_rebalance(
     opportunity_repo: SqliteOpportunityRepository = SqliteOpportunityRepository(db_path)
     history_repo: SqliteHistoryRepository = SqliteHistoryRepository(db_path)
 
+    if injected_snapshot is not None:
+        latest_snapshot: PortfolioSnapshot | None = injected_snapshot
+    else:
+        history: list[PortfolioSnapshot] = history_repo.load_history()
+        raw_snapshot: PortfolioSnapshot | None = history[-1] if history else None
+        portfolio_tickers: set[str] = {
+            str(item.get("yahoo_ticker") or item.get("symbol") or "").strip()
+            for item in portfolio_raw
+            if item.get("yahoo_ticker") or item.get("symbol")
+        }
+        latest_snapshot = _validate_snapshot(
+            raw_snapshot, portfolio_tickers, settings.snapshot_freshness_hours
+        )
+
     with console.status("[bold cyan]Fetching market data and evaluating portfolio..."):
         current_alloc_map: dict[str, float]
         total_val: float
         current_alloc_map, total_val = calculate_current_allocations(
-            portfolio_raw, stock_provider
+            portfolio_raw, stock_provider, snapshot=latest_snapshot
         )
 
         enriched_assets: list[dict[str, Any]] = []
@@ -967,9 +1068,6 @@ def recommend_rebalance(
     if not enriched_assets:
         logger.error("Could not enrich any target asset.")
         raise typer.Exit(code=1)
-
-    history: list[PortfolioSnapshot] = history_repo.load_history()
-    latest_snapshot: PortfolioSnapshot | None = history[-1] if history else None
 
     engine: PortfolioOpportunityEngine = PortfolioOpportunityEngine()
     ranked_scores: list[AssetScore] = engine.rank_assets(

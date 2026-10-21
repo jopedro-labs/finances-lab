@@ -74,7 +74,8 @@ class SqlitePortfolioRepository:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT isin, name, yahoo_ticker, quantity, "
-                    "average_buy_price, asset_type FROM assets ORDER BY id ASC"
+                    "average_buy_price, asset_type FROM assets "
+                    "WHERE is_active = 1 AND quantity > 0 ORDER BY id ASC"
                 )
                 rows = cursor.fetchall()
                 return [
@@ -146,6 +147,7 @@ class SqliteHistoryRepository:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT id, timestamp, total_value_eur FROM snapshots "
+                    "WHERE COALESCE(is_baseline, 0) = 0 "
                     "ORDER BY id ASC"
                 )
                 snapshots_rows = cursor.fetchall()
@@ -215,25 +217,11 @@ class SqliteHistoryRepository:
                     if row:
                         asset_id: int = row["id"]
                     else:
-                        cursor.execute(
-                            """
-                            INSERT INTO assets (
-                                isin, name, yahoo_ticker, quantity,
-                                average_buy_price, asset_type
-                            )
-                            VALUES (?, ?, ?, 0.0, 0.0, 'stock')
-                            """,
-                            (
-                                asset_snap.isin if asset_snap.isin else None,
-                                asset_snap.name,
-                                asset_snap.yahoo_ticker,
-                            ),
+                        raise StorageWriteError(
+                            f"Ticker '{asset_snap.yahoo_ticker}' not found in "
+                            "assets table. Add it to portfolio.json and run "
+                            "the migration before saving snapshots."
                         )
-                        if cursor.lastrowid is None:
-                            raise StorageWriteError(
-                                "Failed to retrieve inserted asset ID."
-                            )
-                        asset_id = cursor.lastrowid
 
                     cursor.execute(
                         """

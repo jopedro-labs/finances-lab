@@ -13,7 +13,7 @@ from rich.text import Text
 
 from src.cli.dashboard import app as dashboard_app
 from src.cli.fundamentals import sync_portfolio_fundamentals
-from src.cli.opportunity import recommend_rebalance
+from src.cli.opportunity import _run_rebalance, recommend_rebalance
 from src.cli.projection_presenter import ProjectionPresenter
 from src.cli.quality import analyze_quality_cmd
 from src.cli.report import app as report_app
@@ -128,6 +128,64 @@ def save_snapshot_cmd() -> None:
     except Exception as err:
         logger.error(f"Unexpected error saving snapshot: {err}")
         raise typer.Exit(code=1) from err
+
+
+@app.command(name="update")
+def update_cmd(
+    targets_file: Annotated[
+        Path,
+        typer.Option(
+            "--targets-file",
+            "-t",
+            help="Path to JSON file containing target wishlist.",
+        ),
+    ] = DATA_DIR
+    / "portfolio_targets.json",
+    portfolio_file: Annotated[
+        Path,
+        typer.Option(
+            "--portfolio-file",
+            "-p",
+            help="Path to JSON file containing active holdings.",
+        ),
+    ] = DATA_DIR
+    / "portfolio.json",
+    db_path: Annotated[
+        Path,
+        typer.Option("--db-path", help="Path to SQLite database file."),
+    ] = Path(DEFAULT_DB_PATH),
+    skip_ai: Annotated[
+        bool,
+        typer.Option("--skip-ai", help="Skip Gemini AI analysis."),
+    ] = False,
+    notify: Annotated[
+        bool,
+        typer.Option("--notify", help="Dispatch results to Discord webhook."),
+    ] = False,
+) -> None:
+    """Fetches prices once, saves snapshot, then scores opportunity — atomically.
+
+    Guarantees that the snapshot and the opportunity matrix share the exact
+    same market prices, eliminating any race condition between the two steps.
+    """
+    logger.section("Atomic Update: Snapshot → Opportunity Scoring")
+
+    snapshot_data: PortfolioSnapshot | None = get_snapshot()
+    if not snapshot_data:
+        logger.error("Failed to calculate portfolio snapshot. Aborting update.")
+        raise typer.Exit(code=1)
+
+    save_snapshot(snapshot_data)
+
+    _run_rebalance(
+        targets_file=targets_file,
+        portfolio_file=portfolio_file,
+        db_path=db_path,
+        skip_ai=skip_ai,
+        verbose=False,
+        notify=notify,
+        injected_snapshot=snapshot_data,
+    )
 
 
 @app.command(name="pull-config")

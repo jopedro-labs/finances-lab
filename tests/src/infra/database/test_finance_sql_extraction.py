@@ -85,6 +85,12 @@ def mock_db_path(tmp_path: Path) -> Path:
             "VALUES (?, ?, ?, ?)",
             (2, 1, 12.0, 960.0),
         )
+        cursor.execute(
+            "INSERT INTO asset_snapshots "
+            "(snapshot_id, asset_id, quantity, value_eur) "
+            "VALUES (?, ?, ?, ?)",
+            (2, 2, 2.5, 240.0),
+        )
 
         connection.commit()
     finally:
@@ -143,7 +149,7 @@ def test_fetch_asset_history_success(mock_db_path: Path) -> None:
     extractor: FinanceSQLExtractor = FinanceSQLExtractor(db_path=mock_db_path)
     records: list[AssetHistoricalRecord] = extractor.fetch_asset_history()
 
-    assert len(records) == 3
+    assert len(records) == 4
 
     first_record: AssetHistoricalRecord = records[0]
     assert first_record.snapshot_date == "2026-01-01"
