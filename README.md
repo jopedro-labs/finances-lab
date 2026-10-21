@@ -372,7 +372,7 @@ make sync-fundamentals
 
 CI runs automatically on every push and pull request to `main` via `.github/workflows/ci.yml`, executing all quality gates and updating the coverage badge.
 
-A daily update runs every day at 00:00 UTC via `.github/workflows/daily-update.yml` — syncs fundamentals, saves a portfolio snapshot, and publishes the latest HTML reports to [GitHub Pages](https://jopedro-labs.github.io/finances/reports/portfolio_report.html).
+A daily update runs every day at 00:00 UTC via `.github/workflows/daily-update.yml` — syncs fundamentals, saves a portfolio snapshot, and publishes the latest HTML reports to [GitHub Pages](https://jopedro-labs.github.io/finances-lab/reports/portfolio_report.html).
 
 ---
 

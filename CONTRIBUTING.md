@@ -4,7 +4,7 @@ Thank you for reviewing or contributing to this project!
 
 ## 1. Requirements
 
-- Python **3.11+**
+- Python **3.13+**
 - Dependencies installed via `pip install -e ".[dev]"`
 - A local `.env` file populated from `.env.example` (never commit real credentials)
 

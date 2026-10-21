@@ -6,16 +6,15 @@ The following versions of **Finances Portfolio Tracker & Opportunity Engine** ar
 
 | Version | Supported          |
 | :------ | :----------------- |
-| 0.3.x   | :white_check_mark: |
-| 0.2.x   | :white_check_mark: |
-| < 0.2.0 | :x:                |
+| 0.7.x   | :white_check_mark: |
+| < 0.7.0 | :x:                |
 
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, credential leak, or policy flaw within this repository:
 
 1. **Do NOT create a public GitHub issue.**
-2. Send a private security report directly to **João Pedro** ([@JoPedro15](https://github.com/JoPedro15)) via GitHub's [private vulnerability reporting](https://github.com/JoPedro15/finances/security/advisories/new).
+2. Send a private security report directly to **João Pedro** ([@JoPedro15](https://github.com/JoPedro15)) via GitHub's [private vulnerability reporting](https://github.com/jopedro-labs/finances-lab/security/advisories/new).
 3. Include the following in your report:
    - Detailed steps to reproduce the vulnerability
    - Affected components and file paths
