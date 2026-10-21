@@ -48,3 +48,6 @@ data/
 !data/example.portfolio.json
 *.db
 *.log
+
+# Local-only files
+TODO.md
