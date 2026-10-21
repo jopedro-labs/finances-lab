@@ -65,7 +65,7 @@
     /* KPI cards */
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 16px;
       margin-bottom: 8px;
     }
@@ -286,6 +286,14 @@
         <div class="kpi-value {% if max_drawdown_percent < 0 %}negative{% endif %}">
           {{ "%.2f"|format(max_drawdown_percent) }}%
         </div>
+        <div class="kpi-sub">Peak → Trough</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Unrealized ROI</div>
+        <div class="kpi-value {% if total_roi_percent >= 0 %}positive{% else %}negative{% endif %}">
+          {{ "%+.2f"|format(total_roi_percent) }}%
+        </div>
+        <div class="kpi-sub">€{{ "%+.2f"|format(total_roi_eur) }} vs cost basis</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Portfolio Composition</div>

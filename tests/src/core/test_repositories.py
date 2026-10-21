@@ -194,7 +194,23 @@ def test_sqlite_history_repo_save_and_load_history(
 ) -> None:
     """Verifies saving and loading portfolio snapshots in SQLite database."""
     db_path: Path = tmp_path / "finances_test.db"
+    portfolio_repo: SqlitePortfolioRepository = SqlitePortfolioRepository(
+        db_path=db_path
+    )
     repo: SqliteHistoryRepository = SqliteHistoryRepository(db_path=db_path)
+
+    portfolio_repo.save_assets(
+        [
+            Asset(
+                name="Apple Inc.",
+                isin="US0378331005",
+                yahoo_ticker="AAPL",
+                quantity=10.0,
+                average_buy_price=150.0,
+                asset_type="stock",
+            )
+        ]
+    )
 
     repo.save_snapshot(sample_snapshot)
     history: list[PortfolioSnapshot] = repo.load_history()

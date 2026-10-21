@@ -149,6 +149,8 @@ class Settings(BaseSettings):
         default=15.0, alias="MAX_COMPANY_ALLOCATION_PCT"
     )
 
+    snapshot_freshness_hours: int = Field(default=4, alias="SNAPSHOT_FRESHNESS_HOURS")
+
     # SMTP / Email Settings
     smtp_server: str = Field(default="", alias="SMTP_SERVER")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")

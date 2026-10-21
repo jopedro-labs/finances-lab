@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.infra.database.connection import DEFAULT_DB_PATH, get_db_context
+from src.infra.database.schema import initialize_database
 
 _ALLOWED_DATE_COLS: frozenset[str] = frozenset({"date", "timestamp"})
 _ALLOWED_TICKER_COLS: frozenset[str] = frozenset({"ticker", "yahoo_ticker"})
@@ -124,15 +125,41 @@ class FinanceSQLExtractor:
 
         records: list[PortfolioHistoricalRecord] = []
         with get_db_context(self.db_path) as conn:
+            initialize_database(conn)
             cursor: sqlite3.Cursor = conn.cursor()
             date_col = self._safe_col(
                 self._get_column_name(cursor, "snapshots", ["date", "timestamp"]),
                 _ALLOWED_DATE_COLS,
             )
+
+            cursor.execute("PRAGMA table_info(snapshots)")
+            snap_cols = {row["name"] for row in cursor.fetchall()}
+            cursor.execute("PRAGMA table_info(assets)")
+            asset_cols = {row["name"] for row in cursor.fetchall()}
+
+            has_baseline = "is_baseline" in snap_cols
+            has_is_active = "is_active" in asset_cols
+            has_quantity = "quantity" in asset_cols
+
+            baseline_clause = (
+                "COALESCE(s.is_baseline, 0) = 1" if has_baseline else "0 = 1"
+            )
+            active_filter = ""
+            if has_is_active:
+                active_filter += " AND COALESCE(is_active, 1) = 1"
+            if has_quantity:
+                active_filter += " AND quantity > 0"
+
             query: str = (
                 f"SELECT s.{date_col} AS snapshot_date, "  # nosec B608
                 f"s.total_value_eur AS total_value_eur "
                 f"FROM snapshots s "
+                f"WHERE s.total_value_eur > 0 "
+                f"AND ({baseline_clause} OR ("
+                f"  SELECT COUNT(*) FROM asset_snapshots sa "
+                f"  WHERE sa.snapshot_id = s.id"
+                f") = ("
+                f"  SELECT COUNT(*) FROM assets WHERE 1=1{active_filter})) "
                 f"ORDER BY s.{date_col} ASC;"
             )
             cursor.execute(query)

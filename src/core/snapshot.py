@@ -192,6 +192,12 @@ def save_snapshot(
         else PortfolioSnapshot.from_dict(snapshot_data)
     )
 
+    if snapshot.total_value_eur <= 0 or not snapshot.assets_snapshot:
+        logger.warning(
+            "Snapshot discarded: no active positions or zero portfolio value."
+        )
+        return
+
     repo: HistoryRepository = history_repo or SqliteHistoryRepository(DEFAULT_DB_PATH)
 
     try:

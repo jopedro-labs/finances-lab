@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS assets (
     quantity REAL NOT NULL,
     average_buy_price REAL NOT NULL,
     asset_type TEXT NOT NULL CHECK (UPPER(asset_type) IN ('STOCK', 'ETF')),
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -25,7 +26,8 @@ CREATE_SNAPSHOTS_TABLE_SQL: str = """
 CREATE TABLE IF NOT EXISTS snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp TEXT NOT NULL UNIQUE,
-    total_value_eur REAL NOT NULL
+    total_value_eur REAL NOT NULL,
+    is_baseline INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -143,6 +145,49 @@ def initialize_database(conn: sqlite3.Connection) -> None:
         cursor.execute(
             "ALTER TABLE opportunity_asset_metrics ADD COLUMN advisory_json TEXT;"
         )
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute(
+            "ALTER TABLE assets ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;"
+        )
+        cursor.execute("UPDATE assets SET is_active = 0 WHERE quantity = 0;")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute(
+            "ALTER TABLE snapshots ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0;"
+        )
+        # Mark the existing synthetic baseline row if it was inserted without the flag.
+        cursor.execute(
+            "UPDATE snapshots SET is_baseline = 1 "
+            "WHERE timestamp = '2026-10-20T21:59:59.000000';"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # Ensure the acquisition-cost baseline snapshot exists.
+    # Calculated from active holdings; idempotent via INSERT OR IGNORE.
+    # Wrapped in try/except for compatibility with legacy test schemas that
+    # lack quantity / average_buy_price columns.
+    try:
+        cursor.execute("SELECT COUNT(*) FROM snapshots WHERE is_baseline = 1;")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "SELECT SUM(quantity * average_buy_price) "
+                "FROM assets WHERE is_active = 1 AND quantity > 0;"
+            )
+            row = cursor.fetchone()
+            total_cost: float = float(row[0]) if row and row[0] else 0.0
+            if total_cost > 0:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO snapshots "
+                    "(timestamp, total_value_eur, is_baseline) "
+                    "VALUES ('2026-10-20T21:59:59.000000', ?, 1);",
+                    (total_cost,),
+                )
     except sqlite3.OperationalError:
         pass
 
