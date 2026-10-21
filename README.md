@@ -159,7 +159,7 @@ All charts are clickable to open a full-screen lightbox overlay. The HTML file i
 
 ### 7. Gemini AI Batch Advisory
 
-- **Enterprise Client**: Powered by Google Gemini AI (`gemini-2.0-flash` by default) via the Google GenAI SDK, with exponential backoff retry for transient errors and quota exhaustion.
+- **Enterprise Client**: Powered by Google Gemini AI (`gemini-3.6-flash` by default) via the Google GenAI SDK, with exponential backoff retry for transient errors and quota exhaustion.
 - **Batch Portfolio Analysis**: Processes the entire target asset list in a single API call, returning structured JSON validated through Pydantic (`BatchRebalanceRecommendations`).
 - **Persistent Storage**: Advisory data (reasoning, valuation metrics, factor scores) is serialised as JSON and persisted to the `opportunity_asset_metrics` table, enabling historical replay in reports without re-running the AI.
 - **Graceful Fallback**: Automatically falls back to the quantitative opportunity matrix if AI is unavailable or `--skip-ai` is passed.
@@ -372,7 +372,7 @@ make sync-fundamentals
 
 CI runs automatically on every push and pull request to `main` via `.github/workflows/ci.yml`, executing all quality gates and updating the coverage badge.
 
-A daily update runs every day at 07:00 UTC via `.github/workflows/daily-update.yml` — syncs fundamentals, saves a portfolio snapshot, and publishes the latest HTML reports to [GitHub Pages](https://jopedro-labs.github.io/finances/reports/portfolio_report.html).
+A daily update runs every day at 00:00 UTC via `.github/workflows/daily-update.yml` — syncs fundamentals, saves a portfolio snapshot, and publishes the latest HTML reports to [GitHub Pages](https://jopedro-labs.github.io/finances/reports/portfolio_report.html).
 
 ---
 

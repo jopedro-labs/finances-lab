@@ -2,7 +2,7 @@ name: Daily Finance Update
 
 on:
   schedule:
-    - cron: "0 7 * * *" # runs every day at 07:00 UTC
+    - cron: "0 0 * * *" # runs every day at 00:00 UTC
   workflow_dispatch:
 
 permissions:
