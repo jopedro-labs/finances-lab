@@ -11,7 +11,7 @@ requires-python = ">=3.13"
 dependencies = [
     "yfinance>=0.2.38",
     "pandas>=2.0.0",
-    "pandas-stubs>=2.0.0",
+    "pandas-stubs>=3.1.0.261029",
     "pyarrow>=14.0.0",
     "fastparquet>=2024.2.0",
     "matplotlib>=3.8.0",
